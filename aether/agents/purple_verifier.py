@@ -160,7 +160,7 @@ class PurpleTeamVerifier:
             import hypothesis
             from hypothesis import given, strategies as st, settings
             
-            PATCHED_CODE = """{patched_code}"""
+            PATCHED_CODE = {repr(patched_code)}
             
             def test_patched_code_is_valid_python():
                 """Verify the patched code is syntactically valid."""
