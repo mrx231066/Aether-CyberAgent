@@ -2,7 +2,7 @@
 
 # 🛡️ AETHER-CYBERAGENT
 
-### Autonomous Multi-Agent AI Security Platform
+### Autonomous Multi-Agent AI Security Platform & Terminal Co-Pilot
 
 [![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![Gemini](https://img.shields.io/badge/Google_Gemini-2.5_Flash-4285F4?style=for-the-badge&logo=google&logoColor=white)](https://ai.google.dev)
@@ -12,7 +12,7 @@
 
 **Deterministic Computer Science × Probabilistic AI**
 
-*AST Parsing · Graph Theory · Formal Logic · Google Gemini · Self-Healing Loops*
+*AST Parsing · Graph Theory · Formal Logic · Google Gemini · Self-Healing Loops · Interactive REPL*
 
 [Getting Started](#-getting-started) · [Architecture](#-architecture) · [Usage](#-usage) · [Dashboard](#-dashboard) · [Contributing](#-contributing)
 
@@ -22,20 +22,20 @@
 
 ## 🧬 What is Aether-CyberAgent?
 
-**Aether-CyberAgent** is an elite, autonomous, multi-agent AI security platform that goes far beyond simple LLM wrappers. It fuses **deterministic computer science** — AST parsing, graph theory, and formal logic verification — with **probabilistic AI** powered by Google Gemini to create a **self-healing, autonomic software engine**.
+**Aether-CyberAgent** is an elite, autonomous, multi-agent AI security platform and terminal co-pilot. It fuses **deterministic computer science** (AST parsing, graph theory, formal logic) with **probabilistic AI** (Google Gemini function calling) to create a **self-healing, autonomic software engine**.
 
-It scans your Python codebase, detects vulnerabilities deterministically, generates AI-powered patches, mathematically verifies them, and outputs industry-standard SARIF reports — all in an autonomous loop that self-corrects on failure.
+Version 0.2.0 introduces the **Antigravity Interactive Agent REPL**, transforming Aether from a CLI scanner into a full autonomous software developer and security team co-pilot that can converse, write scripts, execute terminal commands, and self-correct when errors occur.
 
-### ✨ Key Features
+### ✨ Key Features (v0.2.0)
 
-- 🔍 **Deterministic Vulnerability Detection** — Python AST-based scanning, not regex guessing
-- 🧠 **AI-Powered Remediation** — Google Gemini generates type-annotated, secure code patches
-- 📐 **Mathematical Verification** — Z3 SMT Solver proves correctness, Hypothesis fuzzes edge cases
-- 🔄 **Self-Healing Loop** — Autonomous retry engine that learns from verification failures
-- 🐳 **Sandboxed Execution** — Every test runs in isolated Docker containers
-- 📊 **Live Dashboard** — Real-time Streamlit visualization of the security pipeline
-- 📋 **SARIF v2.1.0 Reports** — Native GitHub Security tab integration
-- 🗺️ **Blast Radius Analysis** — NetworkX graphs map vulnerability impact across your codebase
+- 💬 **Interactive Agent REPL** — Converse with Aether dynamically in a rich terminal interface.
+- 🛠️ **Autonomous Tool Execution** — Aether can read/write files and execute shell scripts safely.
+- 🔄 **Self-Correction Loop** — If a script fails, the Gold Team intercepts the stderr and feeds it back to the Yellow Team for autonomous auto-fixing (up to 3 retries).
+- 🔍 **Deterministic Vulnerability Detection** — Python AST-based scanning, not regex guessing.
+- 🧠 **AI-Powered Remediation** — Google Gemini generates type-annotated, secure code patches.
+- 📐 **Mathematical Verification** — Z3 SMT Solver proves correctness, Hypothesis fuzzes edge cases.
+- 📊 **Live Dashboard** — Real-time Streamlit visualization of the security pipeline.
+- 📋 **SARIF v2.1.0 Reports** — Native GitHub Security tab integration.
 
 ---
 
@@ -45,15 +45,15 @@ Aether-CyberAgent implements a **defensive Cybersecurity Team Spectrum** model. 
 
 ### The Team Spectrum
 
-```
+```text
 ┌──────────────────────────────────────────────────────────────────────┐
 │                     🥇 GOLD TEAM (Orchestrator)                      │
 │              Autonomic Self-Healing Loop · Max 3 Retries             │
 │                                                                      │
 │  ┌────────────┐   ┌────────────┐   ┌────────────┐   ┌────────────┐  │
 │  │ 🔵 BLUE    │──▶│ 🟡 YELLOW  │──▶│ 🟣 PURPLE  │──▶│ 🟢 GREEN   │  │
-│  │ AST Audit  │   │ AI Patch   │   │ Z3 Verify  │   │ Docker Run │  │
-│  │ + GraphRAG │   │ + Gemini   │   │ + Hypothes │   │ + CI/CD    │  │
+│  │ AST Audit  │   │ AI Patch   │   │ Z3 Verify  │   │ Tool Run   │  │
+│  │ + GraphRAG │   │ + Scripts  │   │ + Hypothes │   │ + Sandbox  │  │
 │  └────────────┘   └─────▲──────┘   └─────┬──────┘   └─────┬──────┘  │
 │                         │                 │                 │         │
 │                         │    ❌ FAIL      │                 │         │
@@ -69,29 +69,12 @@ Aether-CyberAgent implements a **defensive Cybersecurity Team Spectrum** model. 
 
 | Team | Role | Mechanism |
 |:----:|------|-----------|
-| 🔵 **Blue Team** | Static Auditor & GraphRAG Memory | Parses Python ASTs to find deterministic vulnerabilities (SQL injection, insecure deserialization, dangerous `eval`/`exec` calls). Uses NetworkX to map import dependencies and calculate blast radius. |
-| 🟡 **Yellow Team** | Remediation & Refactoring | Integrates with Google Gemini API via `google-genai` SDK. Receives Blue Team findings and generates secure, type-annotated code patches using strict Pydantic structured outputs. |
-| 🟣 **Purple Team** | Formal Verification | Verifies patches mathematically. Z3 SMT Solver checks variable bounds and logic constraints. Hypothesis generates property-based boundary tests to prevent regressions. |
-| 🥇 **Gold Team** | Autonomic Self-Correction | The orchestrator. If Purple Team verification fails, Gold Team intercepts the failure trace, rolls back state, updates prompt context, and retries Yellow Team — up to 3 attempts. |
-| 🟢 **Green Team** | DevSecOps Automation | Executes the pipeline in isolated Docker sandboxes. Manages GitHub Actions integration for CI/CD. |
-| ⚪ **White Team** | Governance & Reporting | Formats verified patches into SARIF v2.1.0 JSON logs for native ingestion into GitHub Security tabs. |
-
----
-
-## 🛠️ Tech Stack
-
-Every component is **100% free and open source**.
-
-| Component | Library | Purpose |
-|-----------|---------|---------|
-| 🤖 AI Engine | [`google-genai`](https://pypi.org/project/google-genai/) | Gemini 2.5 Flash (Free Tier) |
-| 📦 Structured Output | [`pydantic`](https://docs.pydantic.dev/) | Type-safe AI response schemas |
-| 💻 Terminal UI | [`rich`](https://rich.readthedocs.io/) + [`typer`](https://typer.tiangolo.com/) | Beautiful CLI tables, spinners, trees |
-| 📊 Web Dashboard | [`streamlit`](https://streamlit.io/) | Real-time DAG visualization & diffs |
-| 🗺️ Graph Memory | [`networkx`](https://networkx.org/) | Dependency blast-radius calculation |
-| 📐 Formal Logic | [`z3-solver`](https://github.com/Z3Prover/z3) | SMT mathematical verification |
-| 🧪 Property Testing | [`hypothesis`](https://hypothesis.readthedocs.io/) | Fuzzing & edge-case generation |
-| 🐳 Sandbox | [`docker`](https://docker-py.readthedocs.io/) | Isolated test execution |
+| 🔵 **Blue Team** | Static Auditor | Parses Python ASTs to find deterministic vulnerabilities (SQL injection, insecure deserialization, dangerous `eval`/`exec`). Calculates blast radius via NetworkX. |
+| 🟡 **Yellow Team** | Autonomous Developer | Integrates with Google Gemini via function calling. Generates scripts, patches code, and invokes read/write/shell tools autonomously. |
+| 🟣 **Purple Team** | Formal Verification | Verifies patches mathematically. Z3 SMT Solver checks variable bounds and logic constraints. Hypothesis generates property-based boundary tests. |
+| 🥇 **Gold Team** | Autonomic Orchestrator | If Purple Team verification or Green Team script execution fails, Gold Team intercepts the failure trace, updates context, and retries Yellow Team. |
+| 🟢 **Green Team** | Tool Execution Engine | Executes scripts and shell commands in isolated sandboxes with strict timeouts. |
+| ⚪ **White Team** | Governance & Reporting | Formats verified patches into SARIF v2.1.0 JSON logs for CI/CD ingestion. |
 
 ---
 
@@ -100,44 +83,46 @@ Every component is **100% free and open source**.
 ### Prerequisites
 
 - **Python 3.11+**
-- **Docker** (running daemon)
+- **Docker** (running daemon, for sandbox execution)
 - **Google Gemini API Key** ([Get one free](https://aistudio.google.com/apikey))
 
 ### Installation
 
 ```bash
 # Clone the repository
-git clone https://github.com/YOUR_USERNAME/aether-cyberagent.git
-cd aether-cyberagent
+git clone https://github.com/mrx231066/Aether-CyberAgent.git
+cd Aether-CyberAgent
 
-# Install with pip
+# Install the CLI package
 pip install -e .
-
-# Or with Poetry
-poetry install
 ```
-
-### Configuration
-
-```bash
-# Set your Gemini API key
-export GEMINI_API_KEY="your-api-key-here"
-
-# Verify Docker is running
-docker info
-```
-
-### GitHub Codespaces
-
-This project includes a `.devcontainer` configuration for one-click setup in GitHub Codespaces with Python 3.11 and Docker-in-Docker support.
-
-[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/YOUR_USERNAME/aether-cyberagent)
 
 ---
 
 ## 💡 Usage
 
-### Run a Security Scan
+### Launch Interactive Agent REPL (New in v0.2.0)
+
+Simply type `aether` to launch the Antigravity Interactive Agent REPL. It will dynamically discover available Gemini models and prompt for your API key if not configured.
+
+```bash
+aether
+```
+
+**Supported Slash Commands:**
+- `/help` — Displays interactive command matrix & agent team status.
+- `/scan [path]` — Executes full background multi-agent security scan.
+- `/model` — Opens interactive model switcher menu.
+- `/auth` — Updates stored API key/config.
+- `/status` — Displays dependency graph metrics & memory state.
+- `/run <script>` — Safely runs a script in the execution sandbox.
+- `/clear` — Clears terminal output.
+- `/exit` or `/quit` — Closes REPL session.
+
+**Autonomous Script Execution & Self-Correction:**
+If you ask Aether to write a script in the chat, it will generate it, write it to disk, and execute it. If it fails, the **Gold Team** intercepts the traceback and auto-fixes the code up to 3 times!
+
+### Run a Standalone Security Scan
 
 ```bash
 # Scan the current directory
@@ -145,12 +130,9 @@ aether scan .
 
 # Scan a specific path
 aether scan ./src/my_project
-
-# Scan with verbose output
-aether scan ./src --verbose
 ```
 
-### Launch the Dashboard
+### Launch the Visual Dashboard
 
 ```bash
 # Start the Streamlit real-time dashboard
@@ -160,101 +142,41 @@ aether dashboard
 ### Verify a Specific File
 
 ```bash
-# Run formal verification on a file
+# Run formal verification on a specific file patch
 aether verify ./src/module.py
 ```
 
-### Example Output
-
-```
-🛡️ Aether-CyberAgent v0.1.0
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🔵 Blue Team: Scanning 47 files...
-   ├── Found 3 vulnerabilities
-   ├── eval() call at auth.py:42
-   ├── exec() call at utils.py:118
-   └── subprocess.Popen(shell=True) at deploy.py:67
-
-🗺️ Blast Radius Analysis:
-   └── auth.py → 12 dependent modules affected
-
-🟡 Yellow Team: Generating patches via Gemini 2.5 Flash...
-   └── ✅ 3 patches generated (structured output)
-
-🟣 Purple Team: Formal verification...
-   ├── Z3 boundary check: ✅ PASS
-   └── Hypothesis fuzzing: ✅ PASS (200 cases)
-
-🟢 Green Team: Docker sandbox execution...
-   └── ✅ All tests passed in isolated container
-
-⚪ White Team: Generating SARIF report...
-   └── 📋 Report saved: .aether/reports/sarif_2025-01-15.json
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-✅ Scan complete. 3 vulnerabilities patched & verified.
-```
-
 ---
 
-## 📊 Dashboard
+## 📁 Project Structure (v0.2.0)
 
-The Streamlit dashboard provides real-time visibility into the security pipeline:
-
-- **🗺️ DAG Visualization** — Interactive dependency graph showing vulnerability propagation
-- **📝 Code Diffs** — Side-by-side before/after comparison of patched code
-- **📈 Metrics** — Scan history, vulnerability trends, and verification success rates
-- **🔄 Live Status** — Real-time progress of the autonomic self-healing loop
-
-```bash
-aether dashboard
-# Opens at http://localhost:8501
-```
-
----
-
-## 📁 Project Structure
-
-```
+```text
 aether-cyberagent/
-├── .devcontainer/
-│   └── devcontainer.json              # GitHub Codespaces setup
-├── .github/
-│   └── workflows/
-│       └── aether-security.yml        # CI/CD pipeline
 ├── aether/
 │   ├── ai/
-│   │   └── gemini_client.py           # 🟡 Gemini SDK + Pydantic schemas
+│   │   └── gemini_client.py       # Dynamic model discovery & Structured Output
 │   ├── agents/
-│   │   ├── blue_auditor.py            # 🔵 AST vulnerability detection
-│   │   ├── purple_verifier.py         # 🟣 Z3 + Hypothesis verification
-│   │   └── gold_autonomic.py          # 🥇 Self-healing orchestrator
+│   │   ├── blue_auditor.py        # Static AST parser
+│   │   ├── yellow_patcher.py      # Refactoring & script generator agent
+│   │   ├── purple_verifier.py     # Z3 formal logic & property testing
+│   │   └── gold_autonomic.py      # Self-correction execution loop
 │   ├── engine/
-│   │   ├── graph_memory.py            # NetworkX dependency graphs
-│   │   └── sandbox.py                 # 🟢 Docker sandboxed execution
+│   │   ├── graph_memory.py        # NetworkX repository dependency graph
+│   │   ├── sandbox.py             # Docker runner
+│   │   └── tools.py               # Autonomous tool execution engine (read/write/shell)
 │   ├── reports/
-│   │   └── sarif.py                   # ⚪ SARIF v2.1.0 report generator
+│   │   └── sarif.py               # White team SARIF v2.1.0 exporter
 │   ├── dashboard/
-│   │   └── app.py                     # Streamlit live dashboard
+│   │   └── app.py                 # Streamlit visualizer
 │   └── cli/
-│       └── main.py                    # Typer CLI entry points
+│       ├── main.py                # Typer CLI entrypoint
+│       └── interactive.py         # Antigravity Interactive REPL & Slash Commands
 ├── tests/
-│   └── test_full_pipeline.py          # Integration test suite
-├── pyproject.toml                     # Project configuration
-├── ARCHITECTURE.md                    # Technical deep-dive
-└── README.md                          # You are here
+│   ├── test_full_pipeline.py      # Scan pipeline tests
+│   └── test_interactive_repl.py   # REPL & tool engine tests
+├── pyproject.toml                 # Package configuration
+└── README.md                      # Documentation
 ```
-
----
-
-## 🔄 CI/CD Integration
-
-Aether-CyberAgent includes a GitHub Actions workflow (`aether-security.yml`) that automatically runs on pull requests:
-
-1. Scans all changed Python files
-2. Runs the full autonomic pipeline
-3. Uploads SARIF results to GitHub Security tab
-4. Comments on the PR with findings
 
 ---
 
@@ -273,12 +195,6 @@ Contributions are welcome! Please read our contributing guidelines before submit
 ## 📄 License
 
 This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
-
----
-
-## ⚠️ Disclaimer
-
-Aether-CyberAgent is a **defensive security tool**. It is designed to identify and remediate vulnerabilities in your own codebase. Always review AI-generated patches before deploying to production. The self-healing loop provides high confidence through formal verification, but human oversight remains essential.
 
 ---
 
