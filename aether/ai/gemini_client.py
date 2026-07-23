@@ -3,7 +3,7 @@
 
 import os
 import json
-from typing import Optional
+from typing import Optional, List
 from pydantic import BaseModel, Field
 from google import genai
 from google.genai import types
@@ -21,23 +21,93 @@ class RemediationResult(BaseModel):
 
 
 class GeminiClient:
-    """Yellow Team: Interfaces with Google Gemini 2.5 Flash for code remediation.
+    """Yellow Team: Interfaces with Google Gemini for code remediation.
     
     Uses structured outputs via Pydantic to ensure type-safe, deterministic
     response parsing from the LLM.
     """
     
-    MODEL = "gemini-2.5-flash"
+    DEFAULT_MODEL = "gemini-2.5-flash"
+    FALLBACK_MODELS = [
+        "gemini-2.5-flash",
+        "gemini-2.5-pro",
+        "gemini-2.0-flash",
+        "gemini-1.5-flash",
+        "gemini-1.5-pro",
+    ]
+    MODEL = DEFAULT_MODEL
     
-    def __init__(self, api_key: Optional[str] = None):
+    def __init__(self, api_key: Optional[str] = None, model: Optional[str] = None):
         self.api_key = api_key or os.environ.get("GEMINI_API_KEY", "")
         if not self.api_key:
             raise ValueError(
                 "GEMINI_API_KEY not found. Set it via environment variable "
                 "or pass api_key to GeminiClient()."
             )
+        self.model = model or os.environ.get("GEMINI_MODEL") or self.DEFAULT_MODEL
         self.client = genai.Client(api_key=self.api_key)
-    
+
+    @classmethod
+    def get_available_models(cls, api_key: Optional[str] = None) -> List[str]:
+        """Fetch available Gemini models dynamically using google-genai SDK.
+        
+        Filters for models supporting content generation and excludes legacy/deprecated models.
+        Falls back gracefully to recommended defaults if listing fails.
+        """
+        key = api_key or os.environ.get("GEMINI_API_KEY", "")
+        if not key:
+            console.print("[yellow]⚠️  No API key provided for model discovery. Using default model list.[/yellow]")
+            return list(cls.FALLBACK_MODELS)
+
+        try:
+            client = genai.Client(api_key=key)
+            models = list(client.models.list())
+            discovered = []
+
+            exclude_keywords = [
+                "embedding", "imagen", "aqa", "bison", "gecko",
+                "text-", "chat-", "audio", "tts", "stt", "vision-legacy"
+            ]
+
+            for m in models:
+                name = getattr(m, "name", "") or ""
+                actions = getattr(m, "supported_actions", None)
+                if actions is None:
+                    actions = getattr(m, "supported_generation_methods", []) or []
+
+                actions_str = [str(a) for a in actions]
+                supports_gen = any("generateContent" in a for a in actions_str) or not actions_str
+
+                if supports_gen:
+                    clean_name = name.replace("models/", "") if name.startswith("models/") else name
+                    if clean_name.startswith("gemini-") and not any(kw in clean_name.lower() for kw in exclude_keywords):
+                        if clean_name not in discovered:
+                            discovered.append(clean_name)
+
+            if discovered:
+                def model_sort_key(m_name: str) -> tuple:
+                    if "2.5-flash" in m_name:
+                        return (0, m_name)
+                    elif "2.5-pro" in m_name:
+                        return (1, m_name)
+                    elif "2.0-flash" in m_name:
+                        return (2, m_name)
+                    elif "1.5-flash" in m_name:
+                        return (3, m_name)
+                    elif "1.5-pro" in m_name:
+                        return (4, m_name)
+                    return (5, m_name)
+
+                discovered.sort(key=model_sort_key)
+                return discovered
+
+            console.print("[yellow]⚠️  No compatible Gemini models found. Using default model list.[/yellow]")
+            return list(cls.FALLBACK_MODELS)
+
+        except Exception as e:
+            console.print(f"[yellow]⚠️  Failed to fetch models dynamically: {e}. Using default model list.[/yellow]")
+            return list(cls.FALLBACK_MODELS)
+
     def request_patch(
         self,
         source_code: str,
@@ -64,7 +134,7 @@ class GeminiClient:
         )
         
         response = self.client.models.generate_content(
-            model=self.MODEL,
+            model=self.model,
             contents=prompt,
             config=config,
         )
@@ -112,3 +182,7 @@ class GeminiClient:
             ])
         
         return "\n".join(prompt_parts)
+
+
+# Alias for compatibility
+GeminiSecurityClient = GeminiClient

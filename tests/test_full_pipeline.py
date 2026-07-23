@@ -193,3 +193,48 @@ class TestSarifReporter:
         )
         report = reporter.generate_report(result)
         assert len(report['runs'][0]['results']) > 0
+
+
+# ── Gemini Client Model Discovery Tests ──
+
+class TestGeminiClientModelDiscovery:
+    def test_get_available_models_fallback_without_key(self, monkeypatch):
+        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+        from aether.ai.gemini_client import GeminiClient
+        models = GeminiClient.get_available_models(api_key=None)
+        assert isinstance(models, list)
+        assert len(models) > 0
+        assert "gemini-2.5-flash" in models
+
+    def test_get_available_models_mock_discovery(self):
+        from unittest.mock import MagicMock, patch
+        from aether.ai.gemini_client import GeminiClient
+
+        mock_m1 = MagicMock()
+        mock_m1.name = "models/gemini-2.5-pro"
+        mock_m1.supported_actions = ["generateContent"]
+
+        mock_m2 = MagicMock()
+        mock_m2.name = "models/gemini-2.5-flash"
+        mock_m2.supported_actions = ["generateContent"]
+
+        mock_m3 = MagicMock()
+        mock_m3.name = "models/text-embedding-004"
+        mock_m3.supported_actions = ["embedContent"]
+
+        with patch("google.genai.Client") as MockClient:
+            mock_client_instance = MockClient.return_value
+            mock_client_instance.models.list.return_value = [mock_m1, mock_m2, mock_m3]
+
+            models = GeminiClient.get_available_models(api_key="fake_key")
+            assert "gemini-2.5-flash" in models
+            assert "gemini-2.5-pro" in models
+            assert "text-embedding-004" not in models
+
+    def test_gemini_client_custom_model(self):
+        from unittest.mock import patch
+        from aether.ai.gemini_client import GeminiClient
+        with patch("google.genai.Client"):
+            client = GeminiClient(api_key="fake_key", model="gemini-2.5-pro")
+            assert client.model == "gemini-2.5-pro"
+

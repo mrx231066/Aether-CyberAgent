@@ -66,11 +66,11 @@ class AutonomicEngine:
     5. Output verified patches and state log
     """
     
-    def __init__(self, max_retries: int = 3, api_key: Optional[str] = None) -> None:
+    def __init__(self, max_retries: int = 3, api_key: Optional[str] = None, model: Optional[str] = None) -> None:
         """Initialize the Autonomic Engine."""
         self.max_retries = max_retries
         self.blue_team = BlueTeamAuditor()
-        self.yellow_team = GeminiClient(api_key=api_key)
+        self.yellow_team = GeminiClient(api_key=api_key, model=model)
         self.purple_team = PurpleTeamVerifier()
         self.graph_memory = CodeGraphMemory()
         self.state = PipelineState(max_retries=max_retries)

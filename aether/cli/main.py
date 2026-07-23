@@ -4,7 +4,9 @@ Entry point for the `aether` command. Provides scan, verify, and dashboard
 subcommands powered by the full multi-agent pipeline.
 """
 
+import os
 import sys
+import json
 import subprocess
 from pathlib import Path
 from typing import Optional
@@ -12,6 +14,8 @@ from typing import Optional
 import typer
 from rich.console import Console
 from rich.panel import Panel
+from rich.prompt import Prompt
+from rich.table import Table
 from rich.tree import Tree
 from rich import box
 
@@ -22,6 +26,8 @@ app = typer.Typer(
 )
 console = Console()
 
+CONFIG_PATH = Path(".aether_config.json")
+
 BANNER = """[bold cyan]
    ╔═══════════════════════════════════════════════╗
    ║          🛡️  AETHER-CYBERAGENT  🛡️            ║
@@ -29,6 +35,60 @@ BANNER = """[bold cyan]
    ║              v0.1.0 · Defense Only             ║
    ╚═══════════════════════════════════════════════╝
 [/bold cyan]"""
+
+
+def load_aether_config() -> dict:
+    """Load configuration from local .aether_config.json."""
+    if CONFIG_PATH.exists():
+        try:
+            return json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+        except Exception:
+            return {}
+    return {}
+
+
+def save_aether_config(data: dict) -> None:
+    """Save/update configuration in local .aether_config.json."""
+    try:
+        config = load_aether_config()
+        config.update(data)
+        CONFIG_PATH.write_text(json.dumps(config, indent=2), encoding="utf-8")
+    except Exception as e:
+        console.print(f"[dim yellow]Warning: Could not save config to {CONFIG_PATH}: {e}[/dim yellow]")
+
+
+def select_model_interactively(api_key: Optional[str] = None) -> str:
+    """Prompt user to select a Gemini model from discovered available models."""
+    from aether.ai.gemini_client import GeminiClient
+
+    console.print("\n[bold cyan]🔍 Discovering available Google Gemini models...[/bold cyan]")
+    available_models = GeminiClient.get_available_models(api_key=api_key)
+
+    if not sys.stdin.isatty():
+        default_model = available_models[0] if available_models else GeminiClient.DEFAULT_MODEL
+        console.print(f"[dim]Non-interactive environment detected. Using default model: {default_model}[/dim]")
+        return default_model
+
+    table = Table(title="🤖 Discovered Gemini Models", box=box.ROUNDED, border_style="cyan")
+    table.add_column("#", style="bold yellow", justify="right")
+    table.add_column("Model Name", style="bold white")
+    table.add_column("Recommendation", style="green")
+
+    for idx, m_name in enumerate(available_models, 1):
+        rec = "⭐ Recommended" if m_name == GeminiClient.DEFAULT_MODEL else "Available"
+        table.add_row(str(idx), m_name, rec)
+
+    console.print(table)
+
+    choices = [str(i) for i in range(1, len(available_models) + 1)]
+    choice = Prompt.ask(
+        "\n[bold yellow]Select a model number[/bold yellow]",
+        choices=choices,
+        default="1",
+    )
+    selected = available_models[int(choice) - 1]
+    console.print(f"[bold green]Selected model: {selected}[/bold green]\n")
+    return selected
 
 
 @app.callback(invoke_without_command=True)
@@ -55,6 +115,8 @@ def scan(
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable verbose output"),
     max_retries: int = typer.Option(3, "--max-retries", "-r", help="Max self-healing retries"),
     api_key: Optional[str] = typer.Option(None, "--api-key", "-k", envvar="GEMINI_API_KEY", help="Gemini API key"),
+    model: Optional[str] = typer.Option(None, "--model", "-m", help="Gemini model to use (e.g. gemini-2.5-pro)"),
+    interactive: bool = typer.Option(False, "--interactive", "-i", help="Force interactive model selection"),
 ):
     """🔵 Run a full autonomous security scan on the target path."""
     console.print(BANNER)
@@ -64,11 +126,45 @@ def scan(
         console.print(f"[bold red]❌ Path does not exist: {path}[/bold red]")
         raise typer.Exit(code=1)
 
+    # 1. API Key Prompt & Validation
+    config = load_aether_config()
+    effective_api_key = api_key or os.environ.get("GEMINI_API_KEY") or config.get("api_key")
+
+    if not effective_api_key:
+        if sys.stdin.isatty():
+            effective_api_key = Prompt.ask(
+                "[bold yellow]🔑 GEMINI_API_KEY not found. Enter your Google Gemini API Key[/bold yellow]",
+                password=True,
+            )
+            if not effective_api_key:
+                console.print("[bold red]❌ API Key is required to run AI remediation.[/bold red]")
+                raise typer.Exit(code=1)
+            os.environ["GEMINI_API_KEY"] = effective_api_key
+            save_aether_config({"api_key": effective_api_key})
+        else:
+            console.print("[bold red]❌ GEMINI_API_KEY not found in environment or config.[/bold red]")
+            raise typer.Exit(code=1)
+    else:
+        os.environ["GEMINI_API_KEY"] = effective_api_key
+
+    # 2. Dynamic Model Selection Logic
+    selected_model: str
+    if model:
+        selected_model = model
+        save_aether_config({"model": selected_model})
+        console.print(f"[bold cyan]🤖 Using specified model: [white]{selected_model}[/white][/bold cyan]")
+    elif config.get("model") and not interactive:
+        selected_model = config["model"]
+        console.print(f"[bold cyan]🤖 Using saved model preference: [white]{selected_model}[/white][/bold cyan]")
+    else:
+        selected_model = select_model_interactively(api_key=effective_api_key)
+        save_aether_config({"model": selected_model})
+
     from aether.agents.gold_autonomic import AutonomicEngine
     from aether.reports.sarif import SarifReporter
 
     try:
-        engine = AutonomicEngine(max_retries=max_retries, api_key=api_key)
+        engine = AutonomicEngine(max_retries=max_retries, api_key=effective_api_key, model=selected_model)
         result = engine.execute_scan(str(target))
 
         # Generate SARIF report
