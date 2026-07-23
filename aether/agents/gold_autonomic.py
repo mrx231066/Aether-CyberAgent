@@ -379,3 +379,176 @@ class AutonomicEngine:
                 json.dump(self.state.history, f, indent=2, default=str)
         except Exception as e:
             console.print(f"[red]Failed to save state log: {e}[/]")
+
+    def execute_and_correct_loop(
+        self,
+        user_prompt: str,
+        max_retries: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """Execute an autonomous script generation and self-correction loop.
+
+        1. Yellow Team generates a script from the user prompt.
+        2. Green Team executes the script via ToolEngine.
+        3. If execution fails (exit code != 0 or traceback detected):
+           - Gold Team captures stderr and traceback.
+           - Feeds failure context back to Yellow Team for auto-fix.
+           - Retries up to max_retries times.
+
+        Args:
+            user_prompt: Task description from the user.
+            max_retries: Max correction attempts (defaults to self.max_retries).
+
+        Returns:
+            Dict with keys: success, script, stdout, stderr, attempts, history.
+        """
+        from aether.agents.yellow_patcher import YellowPatcher
+        from aether.engine.tools import ToolEngine
+
+        retries = max_retries if max_retries is not None else self.max_retries
+        tools = ToolEngine()
+        history = []
+
+        # Initialize Yellow Patcher for script generation
+        try:
+            patcher = YellowPatcher(
+                api_key=self.yellow_team.api_key,
+                model=self.yellow_team.model,
+            )
+        except Exception as e:
+            return {
+                "success": False,
+                "script": None,
+                "stdout": "",
+                "stderr": f"Failed to initialize Yellow Patcher: {e}",
+                "attempts": 0,
+                "history": [],
+            }
+
+        console.print(
+            Panel(
+                f"[bold white]Task:[/bold white] {user_prompt}",
+                title="🥇 Gold Team: Autonomous Execution Loop",
+                border_style="yellow",
+            )
+        )
+
+        current_prompt = user_prompt
+        last_script = None
+        last_stdout = ""
+        last_stderr = ""
+
+        for attempt in range(1, retries + 1):
+            console.print(
+                f"\n[bold yellow]🔄 Attempt {attempt}/{retries}[/bold yellow]"
+            )
+
+            # Step 1: Yellow Team generates script
+            console.print("[bold cyan]🟡 Yellow Team: Generating script...[/bold cyan]")
+            script = patcher.generate_script(current_prompt)
+
+            if not script:
+                console.print("[red]❌ Yellow Team failed to generate a script.[/red]")
+                history.append({
+                    "attempt": attempt,
+                    "phase": "generation",
+                    "success": False,
+                    "error": "No script generated",
+                })
+                continue
+
+            last_script = script
+
+            # Show the generated script
+            from rich.syntax import Syntax
+            console.print(
+                Panel(
+                    Syntax(script, "python", theme="monokai", line_numbers=True),
+                    title=f"Generated Script (Attempt {attempt})",
+                    border_style="cyan",
+                )
+            )
+
+            # Step 2: Green Team executes the script
+            console.print("[bold green]🟢 Green Team: Executing script...[/bold green]")
+            import tempfile
+            with tempfile.NamedTemporaryFile(
+                mode="w", suffix=".py", delete=False, dir="."
+            ) as f:
+                f.write(script)
+                script_path = f.name
+
+            result = tools.execute_shell(f"python {script_path}", timeout=60)
+            last_stdout = result["stdout"]
+            last_stderr = result["stderr"]
+            exit_code = result["exit_code"]
+
+            # Clean up temp file
+            try:
+                Path(script_path).unlink()
+            except OSError:
+                pass
+
+            if result["stdout"]:
+                console.print(
+                    Panel(result["stdout"].strip()[:2000], title="stdout", border_style="green")
+                )
+            if result["stderr"]:
+                console.print(
+                    Panel(result["stderr"].strip()[:2000], title="stderr", border_style="red")
+                )
+
+            history.append({
+                "attempt": attempt,
+                "phase": "execution",
+                "exit_code": exit_code,
+                "stdout": last_stdout[:500],
+                "stderr": last_stderr[:500],
+                "timed_out": result["timed_out"],
+            })
+
+            # Step 3: Check result
+            if exit_code == 0 and not self._has_traceback(last_stderr):
+                console.print(
+                    f"[bold green]✅ Script executed successfully on attempt {attempt}.[/bold green]"
+                )
+                return {
+                    "success": True,
+                    "script": last_script,
+                    "stdout": last_stdout,
+                    "stderr": last_stderr,
+                    "attempts": attempt,
+                    "history": history,
+                }
+
+            # Step 4: Gold Team intercepts failure and feeds back to Yellow
+            console.print(
+                "[bold yellow]🥇 Gold Team: Intercepting failure, preparing corrective prompt...[/bold yellow]"
+            )
+            error_context = last_stderr if last_stderr else f"Exit code: {exit_code}"
+            current_prompt = (
+                f"The previous script failed with the following error:\n\n"
+                f"```\n{error_context}\n```\n\n"
+                f"Original task: {user_prompt}\n\n"
+                f"Please fix the script to resolve this error. "
+                f"Return the complete corrected script."
+            )
+
+        # All retries exhausted
+        console.print(
+            f"[bold red]❌ All {retries} attempts exhausted. Script could not be auto-fixed.[/bold red]"
+        )
+        return {
+            "success": False,
+            "script": last_script,
+            "stdout": last_stdout,
+            "stderr": last_stderr,
+            "attempts": retries,
+            "history": history,
+        }
+
+    @staticmethod
+    def _has_traceback(stderr: str) -> bool:
+        """Check if stderr contains a Python traceback."""
+        traceback_indicators = ["Traceback (most recent call last)", "Error:", "Exception:"]
+        return any(indicator in stderr for indicator in traceback_indicators)
+

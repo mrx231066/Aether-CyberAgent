@@ -32,7 +32,7 @@ BANNER = """[bold cyan]
    ╔═══════════════════════════════════════════════╗
    ║          🛡️  AETHER-CYBERAGENT  🛡️            ║
    ║   Autonomous Multi-Agent AI Security Platform  ║
-   ║              v0.1.0 · Defense Only             ║
+   ║              v0.2.0 · Defense Only             ║
    ╚═══════════════════════════════════════════════╝
 [/bold cyan]"""
 
@@ -95,18 +95,8 @@ def select_model_interactively(api_key: Optional[str] = None) -> str:
 def main(ctx: typer.Context):
     """Aether-CyberAgent: Autonomous AI Security Platform."""
     if ctx.invoked_subcommand is None:
-        console.print(BANNER)
-        console.print(
-            Panel(
-                "[dim]Run [bold]aether scan <path>[/bold] to start a security audit.\n"
-                "Run [bold]aether dashboard[/bold] to launch the live visualizer.\n"
-                "Run [bold]aether verify <path>[/bold] to verify a specific file.[/dim]",
-                title="🚀 Quick Start",
-                border_style="cyan",
-                box=box.ROUNDED,
-                padding=(1, 2),
-            )
-        )
+        from aether.cli.interactive import start_interactive_session
+        start_interactive_session()
 
 
 @app.command()
