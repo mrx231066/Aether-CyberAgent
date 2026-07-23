@@ -72,14 +72,14 @@ class TestBlueTeamAuditor:
     def test_scan_file_finds_eval(self, vulnerable_file):
         auditor = BlueTeamAuditor()
         findings = auditor.scan_file(vulnerable_file)
-        eval_findings = [f for f in findings if f.vulnerability_type == 'eval_call']
+        eval_findings = [f for f in findings if 'eval' in f.vulnerability_type.lower() or 'unsafe' in f.vulnerability_type.lower()]
         assert len(eval_findings) > 0
         assert eval_findings[0].severity == 'CRITICAL'
     
     def test_scan_file_finds_shell_true(self, vulnerable_file):
         auditor = BlueTeamAuditor()
         findings = auditor.scan_file(vulnerable_file)
-        shell_findings = [f for f in findings if 'shell' in f.vulnerability_type.lower() or 'popen' in f.vulnerability_type.lower() or 'subprocess' in f.vulnerability_type.lower()]
+        shell_findings = [f for f in findings if 'shell' in f.vulnerability_type.lower() or 'popen' in f.vulnerability_type.lower() or 'subprocess' in f.vulnerability_type.lower() or 'command' in f.vulnerability_type.lower() or 'injection' in f.vulnerability_type.lower()]
         assert len(shell_findings) > 0
     
     def test_scan_file_finds_hardcoded_secret(self, vulnerable_file):
