@@ -361,7 +361,7 @@ def start_interactive_session():
             console.print(_render_status_bar(model))
 
             try:
-                user_input = Prompt.ask("[bold green]aether[/bold green]")
+                user_input = console.input("[bold green]aether > [/bold green]")
             except (EOFError, KeyboardInterrupt):
                 console.print("\n[bold cyan]👋 Session ended.[/bold cyan]")
                 break
