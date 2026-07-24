@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "aether-cyberagent"
-version = "0.4.0"
+version = "0.4.1"
 description = "Elite AI security engineer and autonomous developer agent."
 authors = [{ name = "Jashan Nain", email = "jashan@example.com" }]
 license = { text = "MIT" }
