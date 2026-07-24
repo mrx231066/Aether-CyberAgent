@@ -23,7 +23,7 @@ console = Console()
 from aether.auth import load_config, save_config, authenticate
 
 REPL_BANNER = """[bold cyan]
-    █████╗ ███████╗████████╗██╗  ██╗███████╗██████╗        [bold white]v0.4.3[/bold white]
+    █████╗ ███████╗████████╗██╗  ██╗███████╗██████╗        [bold white]v0.5.0[/bold white]
    ██╔══██╗██╔════╝╚══██╔══╝██║  ██║██╔════╝██╔══██╗
    ███████║█████╗     ██║   ███████║█████╗  ██████╔╝
    ██╔══██║██╔══╝     ██║   ██╔══██║██╔══╝  ██╔══██╗
@@ -311,8 +311,7 @@ def _chat_with_agent(user_input: str, api_key: str, model: str, patcher=None):
     try:
         if patcher is None:
             patcher = YellowPatcher(api_key=api_key, model=model)
-        response = patcher.chat(user_input)
-        console.print(f"\n[bold cyan]🤖 Aether:[/bold cyan] {response}\n")
+        patcher.chat(user_input)
     except Exception as e:
         console.print(f"[bold red]❌ Agent error: {e}[/bold red]")
 
@@ -374,6 +373,24 @@ def start_interactive_session():
     def _(event):
         toggle_mode()
         event.app.invalidate()
+
+    @bindings.add("c-o")
+    def _(event):
+        from aether.config import SessionState
+        SessionState.verbose_tools = getattr(SessionState, "verbose_tools", False)
+        SessionState.verbose_tools = not SessionState.verbose_tools
+        event.app.invalidate()
+
+    @bindings.add("?")
+    def _(event):
+        if not event.app.current_buffer.text:
+            console.print("\n[bold cyan]⌨️  Aether Shortcuts[/bold cyan]")
+            console.print("  [bold yellow]Shift+Tab[/bold yellow] : Toggle accept-edits / ask-before-edit")
+            console.print("  [bold yellow]Ctrl+O[/bold yellow]    : Toggle verbose tool logs")
+            console.print("  [bold yellow]Ctrl+C[/bold yellow]    : Cancel current input")
+            event.app.current_buffer.reset()
+        else:
+            event.app.current_buffer.insert_text("?")
         
     @bindings.add("c-c")
     def _(event):
@@ -386,6 +403,7 @@ def start_interactive_session():
         completer=completer,
         key_bindings=bindings,
         bottom_toolbar=header.get_header_text,
+        rprompt=header.get_rprompt_text,
     )
 
     patcher = None

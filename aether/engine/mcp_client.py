@@ -10,8 +10,13 @@ class MCPClient:
 
     @classmethod
     def connect(cls, url: str):
-        cls._connections[url] = {"status": "connected"}
-        console.print(f"[bold green]🔌 MCP Connected to: {url}[/bold green]")
+        proto_type = "Generic"
+        if url.startswith("sqlite://"): proto_type = "SQLite"
+        elif url.startswith("github://"): proto_type = "GitHub"
+        elif url.startswith("jira://"): proto_type = "Jira"
+        
+        cls._connections[url] = {"status": "connected", "type": proto_type}
+        console.print(f"[bold green]🔌 MCP Connected to {proto_type}: {url}[/bold green]")
 
     @classmethod
     def list_servers(cls):

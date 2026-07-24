@@ -218,6 +218,10 @@ class YellowPatcher:
             stream_iter = None
             first_chunk = None
             
+            import time
+            start_time = time.time()
+            turn_tokens = 0
+            
             with console.status("[dim]● Thinking...[/dim]", spinner="dots"):
                 response_stream = self.chat_session.send_message_stream(contents)
                 stream_iter = iter(response_stream)
@@ -227,6 +231,7 @@ class YellowPatcher:
                     first_chunk = None
 
             def process_chunk(chunk):
+                nonlocal turn_tokens
                 if chunk.usage_metadata:
                     total = getattr(chunk.usage_metadata, "total_token_count", 0)
                     if total == 0:
@@ -234,6 +239,7 @@ class YellowPatcher:
                         c = getattr(chunk.usage_metadata, "candidates_token_count", 0)
                         total = p + c
                     SessionState.total_tokens += total
+                    turn_tokens = total
                     
                 if not chunk.candidates:
                     return
@@ -255,6 +261,9 @@ class YellowPatcher:
                 process_chunk(first_chunk)
                 for chunk in stream_iter:
                     process_chunk(chunk)
+                    
+            duration = time.time() - start_time
+            console.print(f"\n[dim]Dim: Thought for {duration:.1f}s, {turn_tokens} tokens[/dim]")
 
             if not function_calls:
                 console.print()  # Newline after finished streaming text
@@ -328,15 +337,21 @@ class YellowPatcher:
                     return f"User declined to write {file_path}"
 
             elif tool_name == "execute_shell":
+                from aether.config import SessionState, Config
                 command = args["command"]
                 timeout = int(args.get("timeout", 30))
-                console.print(Panel(f"[bold cyan]{command}[/bold cyan]", title="⚡ Executing System Command", border_style="cyan"))
+                console.print(f"[dim]• Bash({command[:40]}...) (ctrl+o to expand)[/dim]")
+                
+                if getattr(SessionState, "verbose_tools", False):
+                    console.print(Panel(f"[bold cyan]{command}[/bold cyan]", title="⚡ Executing System Command", border_style="cyan"))
+                
                 result = self.tools.execute_shell(command, timeout=timeout)
 
-                if result["stdout"] and not Config.GOD_MODE:
-                    console.print(Panel(result["stdout"].strip()[:2000], title="stdout", border_style="green"))
-                if result["stderr"]:
-                    console.print(Panel(result["stderr"].strip()[:2000], title="stderr", border_style="red"))
+                if getattr(SessionState, "verbose_tools", False):
+                    if result["stdout"] and not Config.GOD_MODE:
+                        console.print(Panel(result["stdout"].strip()[:2000], title="stdout", border_style="green"))
+                    if result["stderr"]:
+                        console.print(Panel(result["stderr"].strip()[:2000], title="stderr", border_style="red"))
 
                 return json.dumps(result)
 
