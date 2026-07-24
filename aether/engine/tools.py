@@ -60,6 +60,21 @@ class ToolEngine:
             True if successful.
         """
         target = self._resolve_path(file_path)
+        
+        # Auto-Rollback Snapshot logic
+        if target.exists() and target.is_file():
+            import shutil
+            import time
+            backup_dir = self.working_dir / ".aether_backup"
+            backup_dir.mkdir(exist_ok=True)
+            timestamp = int(time.time())
+            backup_path = backup_dir / f"{target.name}.{timestamp}.bak"
+            try:
+                shutil.copy2(target, backup_path)
+                console.print(f"[dim]💾 Auto-rollback snapshot created: {backup_path.name}[/dim]")
+            except Exception as e:
+                console.print(f"[dim red]Warning: Failed to create snapshot for {target.name}: {e}[/dim red]")
+
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content, encoding="utf-8")
         return True

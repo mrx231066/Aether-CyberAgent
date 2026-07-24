@@ -88,6 +88,42 @@ TOOL_DECLARATIONS = [
                 },
             ),
         ),
+        types.FunctionDeclaration(
+            name="adb_connector",
+            description="Execute Android Debug Bridge commands (adb devices, adb shell). Auto-bridges if offline.",
+            parameters=types.Schema(
+                type="OBJECT",
+                properties={
+                    "command": types.Schema(
+                        type="STRING",
+                        description="ADB command to execute (without 'adb ' prefix)",
+                    ),
+                },
+                required=["command"],
+            ),
+        ),
+        types.FunctionDeclaration(
+            name="github_connector",
+            description="Interface with local Git CLI to read status, commit, and push dynamically.",
+            parameters=types.Schema(
+                type="OBJECT",
+                properties={
+                    "action": types.Schema(
+                        type="STRING",
+                        description="Git action: status, add, commit, push",
+                    ),
+                    "target": types.Schema(
+                        type="STRING",
+                        description="Target file for add, or commit message for commit",
+                    ),
+                },
+                required=["action"],
+            ),
+        ),
+        types.FunctionDeclaration(
+            name="gmail_connector",
+            description="Stub function for future email integrations.",
+        ),
     ]),
 ]
 
@@ -134,40 +170,61 @@ class YellowPatcher:
         )
 
     def chat(self, user_message: str) -> str:
-        """Send a message to the agent and process tool calls in a loop.
+        from aether.config import SessionState
+        from PIL import Image
+        from pathlib import Path
+        
+        # Phase 3: Vision Check
+        contents = [user_message]
+        for word in user_message.split():
+            if word.lower().endswith(('.png', '.jpg', '.jpeg', '.webp', '.heic', '.heif')):
+                img_path = Path(word).resolve()
+                if img_path.exists() and img_path.is_file():
+                    try:
+                        img = Image.open(img_path)
+                        contents.append(img)
+                        console.print(f"[dim]👁️ Loaded vision context: {img_path.name}[/dim]")
+                    except Exception as e:
+                        console.print(f"[dim red]Vision Error: Could not load {img_path.name}: {e}[/dim red]")
 
-        Args:
-            user_message: The user's input message.
+        console.print(f"\n[bold cyan]🤖 Aether:[/bold cyan] ", end="")
+        response_stream = self.chat_session.send_message_stream(contents)
+        SessionState.chat_history.append(f"User: {user_message}")
 
-        Returns:
-            The agent's final text response.
-        """
-        response = self.chat_session.send_message(user_message)
-
-        # Process tool calls in a loop (max 10 rounds to prevent infinite loops)
         for _ in range(10):
-            if not response.candidates:
-                return "No response generated."
-
-            candidate = response.candidates[0]
-
-            # Collect function calls from response parts
             function_calls = []
-            if candidate.content and candidate.content.parts:
-                for part in candidate.content.parts:
-                    if hasattr(part, "function_call") and part.function_call:
-                        function_calls.append(part.function_call)
-
-            if not function_calls:
-                # No more tool calls — extract final text response
-                text_parts = []
+            text_parts = []
+            
+            for chunk in response_stream:
+                if chunk.usage_metadata:
+                    # In newer google-genai versions it might be prompt_token_count + candidates_token_count
+                    total = getattr(chunk.usage_metadata, "total_token_count", 0)
+                    if total == 0:
+                        p = getattr(chunk.usage_metadata, "prompt_token_count", 0)
+                        c = getattr(chunk.usage_metadata, "candidates_token_count", 0)
+                        total = p + c
+                    SessionState.total_tokens += total
+                    
+                if not chunk.candidates:
+                    continue
+                    
+                candidate = chunk.candidates[0]
                 if candidate.content and candidate.content.parts:
                     for part in candidate.content.parts:
-                        if hasattr(part, "text") and part.text:
+                        if hasattr(part, "function_call") and part.function_call:
+                            function_calls.append(part.function_call)
+                        elif hasattr(part, "text") and part.text:
                             text_parts.append(part.text)
-                return "\n".join(text_parts) if text_parts else "Task completed."
+                            console.print(part.text, end="")
 
-            # Execute each tool call and collect responses
+            if not function_calls:
+                console.print()  # Newline after finished streaming text
+                final_text = "\n".join(text_parts) if text_parts else "Task completed."
+                SessionState.chat_history.append(f"Aether: {final_text}")
+                return final_text
+
+            console.print() # Newline before tool execution
+            
             tool_responses = []
             for fc in function_calls:
                 result = self._execute_tool(fc.name, dict(fc.args) if fc.args else {})
@@ -178,8 +235,8 @@ class YellowPatcher:
                     )
                 )
 
-            # Send tool results back to Gemini for the next round
-            response = self.chat_session.send_message(tool_responses)
+            console.print(f"\n[bold cyan]🤖 Aether:[/bold cyan] ", end="")
+            response_stream = self.chat_session.send_message_stream(tool_responses)
 
         return "Maximum tool execution rounds reached."
 
@@ -200,16 +257,16 @@ class YellowPatcher:
                 return content
 
             elif tool_name == "write_file":
+                from aether.config import Config
                 file_path = args["file_path"]
                 content = args["content"]
 
-                # Show proposed content and ask for approval
                 console.print(f"\n[bold yellow]📝 Agent wants to write: {file_path}[/bold yellow]")
                 lang = "python" if file_path.endswith(".py") else "text"
                 syntax = Syntax(content, lang, theme="monokai", line_numbers=True)
                 console.print(Panel(syntax, title=f"Proposed: {file_path}", border_style="yellow"))
 
-                if Confirm.ask(f"[bold]Apply changes to {file_path}?[/bold]", default=True):
+                if Config.GOD_MODE or Confirm.ask(f"[bold]Apply changes to {file_path}?[/bold]", default=True):
                     self.tools.write_file(file_path, content)
                     console.print(f"[green]✅ Written: {file_path}[/green]")
                     return f"File written successfully: {file_path}"
@@ -242,6 +299,24 @@ class YellowPatcher:
                 tree_str = "\n".join(entries[:100])
                 console.print(f"[dim]📁 Listed: {path} ({len(entries)} entries)[/dim]")
                 return tree_str
+
+            elif tool_name == "adb_connector":
+                from aether.engine.connectors import adb_connector
+                cmd = args["command"]
+                console.print(f"[dim]📱 ADB Executing: {cmd}[/dim]")
+                return adb_connector(cmd)
+
+            elif tool_name == "github_connector":
+                from aether.engine.connectors import github_connector
+                action = args["action"]
+                target = args.get("target", "")
+                console.print(f"[dim]🐙 Git Action: {action} {target}[/dim]")
+                return github_connector(action, target)
+
+            elif tool_name == "gmail_connector":
+                from aether.engine.connectors import gmail_connector
+                console.print(f"[dim]📧 Gmail Connector Invoked[/dim]")
+                return gmail_connector()
 
             else:
                 return f"Unknown tool: {tool_name}"

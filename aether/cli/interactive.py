@@ -20,86 +20,28 @@ from rich import box
 
 console = Console()
 
-CONFIG_PATH = Path.home() / ".aether_config.json"
+from aether.auth import load_config, save_config, authenticate
 
 REPL_BANNER = """[bold cyan]
-   ╔═══════════════════════════════════════════════╗
-   ║       🛡️  AETHER-CYBERAGENT v0.2.0  🛡️       ║
-   ║     Antigravity Interactive Agent REPL         ║
-   ║              Defense Only · REPL Mode          ║
-   ╚═══════════════════════════════════════════════╝
-[/bold cyan]"""
-
+    █████╗ ███████╗████████╗██╗  ██╗███████╗██████╗ 
+   ██╔══██╗██╔════╝╚══██╔══╝██║  ██║██╔════╝██╔══██╗
+   ███████║█████╗     ██║   ███████║█████╗  ██████╔╝
+   ██╔══██║██╔══╝     ██║   ██╔══██║██╔══╝  ██╔══██╗
+   ██║  ██║███████╗   ██║   ██║  ██║███████╗██║  ██║
+   ╚═╝  ╚═╝╚══════╝   ╚═╝   ╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝
+[/bold cyan]
+[bold cyan]Developed by Jashan Nain[/bold cyan]
+"""
 
 # ── Configuration Helpers ──
-
-
-def load_config() -> dict:
-    """Load configuration from ~/.aether_config.json."""
-    if CONFIG_PATH.exists():
-        try:
-            return json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
-        except Exception:
-            return {}
-    return {}
-
-
-def save_config(data: dict) -> None:
-    """Save/update configuration to ~/.aether_config.json."""
-    try:
-        config = load_config()
-        config.update(data)
-        CONFIG_PATH.write_text(json.dumps(config, indent=2), encoding="utf-8")
-    except Exception as e:
-        console.print(f"[dim yellow]Warning: Could not save config: {e}[/dim yellow]")
-
-
-# ── Authentication Interceptor ──
-
-
-def authenticate() -> tuple:
-    """Run the authentication interceptor on REPL startup.
-
-    Checks ~/.aether_config.json for stored credentials.
-    If missing, prompts the user interactively for API key and model selection.
-
-    Returns:
-        Tuple of (api_key, model_name).
-    """
-    config = load_config()
-    api_key = config.get("api_key") or os.environ.get("GEMINI_API_KEY")
-    model = config.get("model")
-
-    if not api_key:
-        console.print(
-            "\n[bold yellow]🔐 First-time setup detected. Let's configure Aether.[/bold yellow]\n"
-        )
-        api_key = Prompt.ask(
-            "[bold cyan]Enter your Google Gemini API Key[/bold cyan]",
-            password=True,
-        )
-        if not api_key:
-            console.print("[bold red]❌ API Key is required.[/bold red]")
-            raise SystemExit(1)
-        os.environ["GEMINI_API_KEY"] = api_key
-        save_config({"api_key": api_key})
-        console.print("[green]✅ API Key saved to ~/.aether_config.json[/green]\n")
-    else:
-        os.environ["GEMINI_API_KEY"] = api_key
-
-    if not model:
-        model = _select_model(api_key)
-        save_config({"model": model})
-
-    return api_key, model
-
 
 def _select_model(api_key: str) -> str:
     """Interactive model selection using dynamic discovery."""
     from aether.ai.gemini_client import GeminiClient
 
     console.print("[bold cyan]🔍 Discovering available Gemini models...[/bold cyan]")
-    models = GeminiClient.get_available_models(api_key=api_key)
+    with console.status("[bold green]Agent working...[/bold green]", spinner="circle"):
+        models = GeminiClient.get_available_models(api_key=api_key)
 
     if not sys.stdin.isatty():
         return models[0] if models else GeminiClient.DEFAULT_MODEL
@@ -125,15 +67,8 @@ def _select_model(api_key: str) -> str:
 
 # ── Slash Command Router ──
 
-
 def handle_slash_command(command: str, api_key: str, model: str) -> Optional[str]:
-    """Route and execute slash commands.
-
-    Returns:
-        New model name if the model was changed.
-        The string "EXIT" to signal session end.
-        None for all other commands.
-    """
+    """Route and execute slash commands."""
     parts = command.strip().split(maxsplit=1)
     cmd = parts[0].lower()
     args = parts[1] if len(parts) > 1 else ""
@@ -164,6 +99,9 @@ def handle_slash_command(command: str, api_key: str, model: str) -> Optional[str
 
     elif cmd == "/status":
         _show_status(model)
+
+    elif cmd == "/quota":
+        _show_quota()
 
     elif cmd == "/run":
         if args:
@@ -201,12 +139,31 @@ def _show_help():
     table.add_row("/model", "Switch Gemini model interactively", "🟡 Yellow")
     table.add_row("/auth", "Update API key & credentials", "—")
     table.add_row("/status", "Show session state & graph metrics", "⚪ White")
+    table.add_row("/quota", "Show token usage & estimated cost", "⚪ White")
     table.add_row("/run <script>", "Execute script in sandbox", "🟢 Green")
     table.add_row("/clear", "Clear terminal output", "—")
     table.add_row("/exit", "Close REPL session", "—")
     table.add_row("", "", "")
     table.add_row("[dim]<any text>[/dim]", "[dim]Chat with Aether AI agent[/dim]", "[dim]🟡 Yellow[/dim]")
 
+    console.print(table)
+
+
+def _show_quota():
+    """Display the Token Quota Engine panel."""
+    from aether.config import SessionState
+    
+    tokens = SessionState.total_tokens
+    cost_per_million = 0.075  # blended average for flash
+    estimated_cost = (tokens / 1_000_000) * cost_per_million
+
+    table = Table(title="💰 Quota Engine", box=box.ROUNDED, border_style="green")
+    table.add_column("Metric", style="bold white")
+    table.add_column("Value", style="bold yellow", justify="right")
+    
+    table.add_row("Session Total Tokens", f"{tokens:,}")
+    table.add_row("Estimated Cost ($)", f"${estimated_cost:.5f}")
+    
     console.print(table)
 
 
@@ -223,7 +180,9 @@ def _run_scan(path: str, api_key: str, model: str):
     try:
         console.print(f"[bold cyan]🔵 Starting multi-agent scan on: {target}[/bold cyan]")
         engine = AutonomicEngine(max_retries=3, api_key=api_key, model=model)
-        result = engine.execute_scan(str(target))
+        
+        with console.status("[bold green]Agent working...[/bold green]", spinner="circle"):
+            result = engine.execute_scan(str(target))
 
         if result.vulnerabilities_found > 0:
             reporter = SarifReporter()
@@ -282,7 +241,8 @@ def _run_script(script_path: str):
         return
 
     console.print(f"[bold green]🟢 Executing: {target.name}...[/bold green]")
-    result = tools.execute_shell(f"python {target}", timeout=60)
+    with console.status("[bold green]Agent working...[/bold green]", spinner="circle"):
+        result = tools.execute_shell(f"python {target}", timeout=60)
 
     if result["stdout"]:
         console.print(
@@ -338,6 +298,13 @@ def start_interactive_session():
     This is the main entry point called when the user types `aether`
     without any subcommands.
     """
+    try:
+        from aether.agents.silver_guardian import SilverGuardian
+        daemon = SilverGuardian()
+        daemon.start()
+    except Exception as e:
+        console.print(f"[dim red]Warning: Could not start SilverGuardian daemon: {e}[/dim red]")
+
     console.print(REPL_BANNER)
 
     # Step 1: Authentication & configuration

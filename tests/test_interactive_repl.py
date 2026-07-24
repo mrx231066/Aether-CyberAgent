@@ -142,42 +142,42 @@ class TestSlashCommands:
 
 class TestConfigManagement:
     def test_load_config_missing(self, monkeypatch):
-        from aether.cli.interactive import load_config, CONFIG_PATH
+        from aether.auth import load_config, CONFIG_PATH
 
-        monkeypatch.setattr("aether.cli.interactive.CONFIG_PATH", Path("/tmp/nonexistent_aether_config.json"))
+        monkeypatch.setattr("aether.auth.CONFIG_PATH", Path("/tmp/nonexistent_aether_config.json"))
         config = load_config()
         assert config == {}
 
     def test_save_and_load_config(self, tmp_path):
-        from aether.cli import interactive
+        from aether import auth
 
         config_file = tmp_path / ".aether_config.json"
-        original_path = interactive.CONFIG_PATH
-        interactive.CONFIG_PATH = config_file
+        original_path = auth.CONFIG_PATH
+        auth.CONFIG_PATH = config_file
 
         try:
-            interactive.save_config({"model": "gemini-2.5-pro", "api_key": "test_key"})
-            config = interactive.load_config()
+            auth.save_config({"model": "gemini-2.5-pro", "api_key": "test_key"})
+            config = auth.load_config()
             assert config["model"] == "gemini-2.5-pro"
             assert config["api_key"] == "test_key"
         finally:
-            interactive.CONFIG_PATH = original_path
+            auth.CONFIG_PATH = original_path
 
     def test_save_config_updates_existing(self, tmp_path):
-        from aether.cli import interactive
+        from aether import auth
 
         config_file = tmp_path / ".aether_config.json"
-        original_path = interactive.CONFIG_PATH
-        interactive.CONFIG_PATH = config_file
+        original_path = auth.CONFIG_PATH
+        auth.CONFIG_PATH = config_file
 
         try:
-            interactive.save_config({"model": "gemini-2.5-flash"})
-            interactive.save_config({"api_key": "new_key"})
-            config = interactive.load_config()
+            auth.save_config({"model": "gemini-2.5-flash"})
+            auth.save_config({"api_key": "new_key"})
+            config = auth.load_config()
             assert config["model"] == "gemini-2.5-flash"
             assert config["api_key"] == "new_key"
         finally:
-            interactive.CONFIG_PATH = original_path
+            auth.CONFIG_PATH = original_path
 
 
 # ── Self-Correction Loop Tests ──
