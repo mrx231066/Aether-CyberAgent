@@ -23,7 +23,7 @@ console = Console()
 from aether.auth import load_config, save_config, authenticate
 
 REPL_BANNER = """[bold cyan]
-    █████╗ ███████╗████████╗██╗  ██╗███████╗██████╗        [bold white]v1.0.0[/bold white]
+    █████╗ ███████╗████████╗██╗  ██╗███████╗██████╗        [bold white]v1.0.5[/bold white]
    ██╔══██╗██╔════╝╚══██╔══╝██║  ██║██╔════╝██╔══██╗
    ███████║█████╗     ██║   ███████║█████╗  ██████╔╝
    ██╔══██║██╔══╝     ██║   ██╔══██║██╔══╝  ██╔══██╗
