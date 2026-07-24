@@ -181,8 +181,8 @@ class YellowPatcher:
 
     def _init_chat(self) -> None:
         """Initialize a persistent chat session with Gemini."""
-        from aether.engine.custom_instructions import InstructionParser
-        final_prompt = InstructionParser.build_sandboxed_prompt(self.SYSTEM_PROMPT)
+        from aether.ai.prompt_builder import PromptBuilder
+        final_prompt = PromptBuilder.build_system_prompt(self.SYSTEM_PROMPT, "Core Function Schemas Loaded")
         
         config = types.GenerateContentConfig(
             system_instruction=final_prompt,

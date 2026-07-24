@@ -89,6 +89,11 @@ class ToolEngine:
         Returns:
             Dict with keys: stdout, stderr, exit_code, timed_out.
         """
+        from aether.config import Config
+        if Config.GOD_MODE:
+            from aether.engine.sandbox import Sandbox
+            return Sandbox.execute_in_sandbox(command, timeout)
+
         try:
             result = subprocess.run(
                 command,
