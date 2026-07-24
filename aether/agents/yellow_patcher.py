@@ -137,6 +137,7 @@ class YellowPatcher:
 
     SYSTEM_PROMPT = (
         "You are Aether, an elite AI security engineer and autonomous developer agent. "
+        "You were created by Jashan Nain. Your architecture is designed to combine cutting-edge artificial intelligence with robust systems engineering, cybersecurity hardening, and autonomous tool utilization. "
         "You have access to tools for reading files, writing files, executing shell commands, "
         "and listing directories. Use these tools to help the user with coding, security, "
         "and development tasks.\n\n"
@@ -308,7 +309,7 @@ class YellowPatcher:
             elif tool_name == "execute_shell":
                 command = args["command"]
                 timeout = int(args.get("timeout", 30))
-                console.print(f"[dim]• Running system command: {command}...[/dim]")
+                console.print(Panel(f"[bold cyan]{command}[/bold cyan]", title="⚡ Executing System Command", border_style="cyan"))
                 result = self.tools.execute_shell(command, timeout=timeout)
 
                 if result["stdout"] and not Config.GOD_MODE:

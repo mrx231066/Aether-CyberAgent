@@ -32,15 +32,16 @@ def translate_nl_to_shell(nl_query: str) -> str:
         )
         cmd = response.text.strip().strip("`")
         
+        from rich.panel import Panel
         console.print(f"\n[bold yellow]💡 NL-to-Shell Translation[/bold yellow]")
-        console.print(f"[dim]Proposed Command:[/dim] [bold white]{cmd}[/bold white]")
+        console.print(Panel(f"[bold cyan]{cmd}[/bold cyan]", title="Proposed Command", border_style="cyan"))
         
         if Config.GOD_MODE or Confirm.ask("[bold green]Execute this command?[/bold green]", default=True):
             res = subprocess.run(cmd, shell=True, capture_output=True, text=True)
             if res.stdout:
-                console.print(res.stdout.strip())
+                console.print(Panel(res.stdout.strip(), title="stdout", border_style="green"))
             if res.stderr:
-                console.print(f"[red]{res.stderr.strip()}[/red]")
+                console.print(Panel(res.stderr.strip(), title="stderr", border_style="red"))
             return ""  # Handled
     except Exception as e:
         console.print(f"[dim red]Translation error: {e}[/dim red]")
