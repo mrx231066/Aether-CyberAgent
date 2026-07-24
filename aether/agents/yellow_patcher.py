@@ -188,16 +188,24 @@ class YellowPatcher:
                         console.print(f"[dim red]Vision Error: Could not load {img_path.name}: {e}[/dim red]")
 
         console.print(f"\n[bold cyan]🤖 Aether:[/bold cyan] ", end="")
-        response_stream = self.chat_session.send_message_stream(contents)
-        SessionState.chat_history.append(f"User: {user_message}")
-
+        
         for _ in range(10):
             function_calls = []
             text_parts = []
             
-            for chunk in response_stream:
+            stream_iter = None
+            first_chunk = None
+            
+            with console.status("[dim]● Thinking...[/dim]", spinner="dots"):
+                response_stream = self.chat_session.send_message_stream(contents)
+                stream_iter = iter(response_stream)
+                try:
+                    first_chunk = next(stream_iter)
+                except StopIteration:
+                    first_chunk = None
+
+            def process_chunk(chunk):
                 if chunk.usage_metadata:
-                    # In newer google-genai versions it might be prompt_token_count + candidates_token_count
                     total = getattr(chunk.usage_metadata, "total_token_count", 0)
                     if total == 0:
                         p = getattr(chunk.usage_metadata, "prompt_token_count", 0)
@@ -206,7 +214,7 @@ class YellowPatcher:
                     SessionState.total_tokens += total
                     
                 if not chunk.candidates:
-                    continue
+                    return
                     
                 candidate = chunk.candidates[0]
                 if candidate.content and candidate.content.parts:
@@ -214,8 +222,17 @@ class YellowPatcher:
                         if hasattr(part, "function_call") and part.function_call:
                             function_calls.append(part.function_call)
                         elif hasattr(part, "text") and part.text:
-                            text_parts.append(part.text)
-                            console.print(part.text, end="")
+                            text = part.text
+                            # Phase 2: Suppress CoT tags if present
+                            if "<thought>" in text or "</thought>" in text:
+                                continue
+                            text_parts.append(text)
+                            console.print(text, end="")
+
+            if first_chunk:
+                process_chunk(first_chunk)
+                for chunk in stream_iter:
+                    process_chunk(chunk)
 
             if not function_calls:
                 console.print()  # Newline after finished streaming text
@@ -235,8 +252,8 @@ class YellowPatcher:
                     )
                 )
 
+            contents = tool_responses
             console.print(f"\n[bold cyan]🤖 Aether:[/bold cyan] ", end="")
-            response_stream = self.chat_session.send_message_stream(tool_responses)
 
         return "Maximum tool execution rounds reached."
 
@@ -252,23 +269,37 @@ class YellowPatcher:
         """
         try:
             if tool_name == "read_file":
+                console.print(f"[dim]• Reading file: {args['file_path']}...[/dim]")
                 content = self.tools.read_file(args["file_path"])
-                console.print(f"[dim]📖 Read: {args['file_path']} ({len(content)} bytes)[/dim]")
                 return content
 
             elif tool_name == "write_file":
                 from aether.config import Config
                 file_path = args["file_path"]
                 content = args["content"]
-
-                console.print(f"\n[bold yellow]📝 Agent wants to write: {file_path}[/bold yellow]")
-                lang = "python" if file_path.endswith(".py") else "text"
-                syntax = Syntax(content, lang, theme="monokai", line_numbers=True)
-                console.print(Panel(syntax, title=f"Proposed: {file_path}", border_style="yellow"))
+                
+                console.print(f"[dim]• Preparing to write file: {file_path}...[/dim]")
+                if not Config.GOD_MODE:
+                    from aether.engine.diff_viewer import DiffViewer
+                    import os
+                    original = ""
+                    if os.path.exists(file_path):
+                        with open(file_path, "r") as f:
+                            original = f.read()
+                    DiffViewer.render_diff(original, content, file_path)
 
                 if Config.GOD_MODE or Confirm.ask(f"[bold]Apply changes to {file_path}?[/bold]", default=True):
                     self.tools.write_file(file_path, content)
                     console.print(f"[green]✅ Written: {file_path}[/green]")
+                    
+                    # Phase 7: Self-Healing Code hook (ruff)
+                    if file_path.endswith(".py"):
+                        import subprocess
+                        res = subprocess.run(f"ruff check {file_path}", shell=True, capture_output=True, text=True)
+                        if res.returncode != 0:
+                            console.print(f"[red]⚠️ Linter found issues in {file_path}. Self-correcting...[/red]")
+                            return f"File written but linter failed: {res.stdout}\n{res.stderr}\nPlease fix these issues."
+                            
                     return f"File written successfully: {file_path}"
                 else:
                     console.print("[yellow]⏭️  Write skipped by user.[/yellow]")
@@ -277,27 +308,21 @@ class YellowPatcher:
             elif tool_name == "execute_shell":
                 command = args["command"]
                 timeout = int(args.get("timeout", 30))
-                console.print(f"[dim]⚡ Executing: {command}[/dim]")
+                console.print(f"[dim]• Running system command: {command}...[/dim]")
                 result = self.tools.execute_shell(command, timeout=timeout)
 
-                if result["stdout"]:
-                    console.print(Panel(
-                        result["stdout"].strip()[:2000],
-                        title="stdout", border_style="green",
-                    ))
+                if result["stdout"] and not Config.GOD_MODE:
+                    console.print(Panel(result["stdout"].strip()[:2000], title="stdout", border_style="green"))
                 if result["stderr"]:
-                    console.print(Panel(
-                        result["stderr"].strip()[:2000],
-                        title="stderr", border_style="red",
-                    ))
+                    console.print(Panel(result["stderr"].strip()[:2000], title="stderr", border_style="red"))
 
                 return json.dumps(result)
 
             elif tool_name == "list_dir":
                 path = args.get("path", ".")
+                console.print(f"[dim]• Scanning directory: {path}...[/dim]")
                 entries = self.tools.list_dir(path)
                 tree_str = "\n".join(entries[:100])
-                console.print(f"[dim]📁 Listed: {path} ({len(entries)} entries)[/dim]")
                 return tree_str
 
             elif tool_name == "adb_connector":

@@ -109,6 +109,45 @@ def handle_slash_command(command: str, api_key: str, model: str) -> Optional[str
         else:
             console.print("[yellow]Usage: /run <script_path>[/yellow]")
 
+    elif cmd == "/rollback":
+        from aether.cli.session_manager import SessionManager
+        n = int(args) if args.isdigit() else 1
+        SessionManager.rollback(n)
+        
+    elif cmd == "/branch":
+        from aether.cli.session_manager import SessionManager
+        if args:
+            SessionManager.branch(args)
+        else:
+            console.print("[yellow]Usage: /branch <branch_name>[/yellow]")
+            
+    elif cmd == "/switch":
+        from aether.cli.session_manager import SessionManager
+        if args:
+            SessionManager.switch_branch(args)
+        else:
+            console.print("[yellow]Usage: /switch <branch_name>[/yellow]")
+            
+    elif cmd == "/mcp":
+        from aether.engine.mcp_client import MCPClient
+        if args == "list":
+            MCPClient.list_servers()
+        elif args.startswith("connect "):
+            url = args.split(" ", 1)[1]
+            MCPClient.connect(url)
+        else:
+            console.print("[yellow]Usage: /mcp list | /mcp connect <url>[/yellow]")
+            
+    elif cmd == "/skills":
+        from aether.engine.skills import SkillsLoader
+        skills = SkillsLoader.discover_skills()
+        if skills:
+            console.print("[bold cyan]🛠️  Local Skills Loaded:[/bold cyan]")
+            for s in skills:
+                console.print(f" - {s}")
+        else:
+            console.print("[yellow]No local skills found in ~/.aether/skills/[/yellow]")
+
     elif cmd == "/clear":
         os.system("clear" if os.name != "nt" else "cls")
 
@@ -293,11 +332,10 @@ def _render_status_bar(model: str) -> str:
 
 
 def start_interactive_session():
-    """Launch the Aether Interactive REPL session.
-
-    This is the main entry point called when the user types `aether`
-    without any subcommands.
-    """
+    """Launch the Aether Interactive REPL session."""
+    import os
+    os.system("clear" if os.name != "nt" else "cls")
+    
     try:
         from aether.agents.silver_guardian import SilverGuardian
         daemon = SilverGuardian()
@@ -321,34 +359,70 @@ def start_interactive_session():
         )
     )
 
-    # Step 2: REPL loop with persistent agent session
-    patcher = None  # Lazy-init on first chat message for persistent conversation
+    # Setup prompt_toolkit
+    from prompt_toolkit import PromptSession
+    from prompt_toolkit.completion import WordCompleter
+    from prompt_toolkit.key_binding import KeyBindings
+    from aether.cli.ui_header import TopHeader, toggle_mode
+
+    commands = ["/help", "/quota", "/diff", "/rollback", "/branch", "/mcp", "/skills", "/scan", "/model", "/auth", "/status", "/run", "/clear", "/exit"]
+    completer = WordCompleter(commands, ignore_case=True)
+    
+    bindings = KeyBindings()
+    
+    @bindings.add("s-tab")
+    def _(event):
+        toggle_mode()
+        event.app.invalidate()
+        
+    @bindings.add("c-c")
+    def _(event):
+        # Graceful SIGINT
+        console.print("\n[yellow]Keyboard interrupt detected. Type /exit to quit.[/yellow]")
+        event.app.current_buffer.reset()
+
+    header = TopHeader(model=model)
+    session = PromptSession(
+        completer=completer,
+        key_bindings=bindings,
+        bottom_toolbar=header.get_header_text,
+    )
+
+    patcher = None
     try:
         while True:
-            console.print(_render_status_bar(model))
-
+            # We use bottom_toolbar as the top status header for prompt_toolkit by putting it at the prompt line
             try:
-                user_input = console.input("[bold green]aether > [/bold green]")
-            except (EOFError, KeyboardInterrupt):
+                user_input = session.prompt("aether > ")
+            except EOFError:
                 console.print("\n[bold cyan]👋 Session ended.[/bold cyan]")
                 break
+            except KeyboardInterrupt:
+                continue
 
             if not user_input.strip():
                 continue
 
-            # Route: slash command or conversational chat
+            # Phase 3: NL-to-Shell Translation
+            from aether.engine.shell_translator import translate_nl_to_shell
+            translated = translate_nl_to_shell(user_input.strip())
+            if translated:
+                user_input = translated
+
             if user_input.strip().startswith("/"):
                 result = handle_slash_command(user_input.strip(), api_key, model)
                 if result == "EXIT":
                     break
                 elif result is not None:
-                    model = result  # Model was switched
-                    patcher = None  # Reset chat session for new model
-
+                    model = result
+                    header.model = model
+                    patcher = None
             else:
                 patcher = _chat_with_agent(
                     user_input.strip(), api_key, model, patcher
                 )
+                from aether.cli.session_manager import SessionManager
+                SessionManager.prune_context()
 
     except Exception as e:
         console.print(f"\n[bold red]❌ REPL error: {e}[/bold red]")
