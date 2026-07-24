@@ -181,8 +181,11 @@ class YellowPatcher:
 
     def _init_chat(self) -> None:
         """Initialize a persistent chat session with Gemini."""
+        from aether.engine.custom_instructions import InstructionParser
+        final_prompt = InstructionParser.build_sandboxed_prompt(self.SYSTEM_PROMPT)
+        
         config = types.GenerateContentConfig(
-            system_instruction=self.SYSTEM_PROMPT,
+            system_instruction=final_prompt,
             tools=TOOL_DECLARATIONS,
             temperature=0.3,
         )
@@ -209,7 +212,7 @@ class YellowPatcher:
                     except Exception as e:
                         console.print(f"[dim red]Vision Error: Could not load {img_path.name}: {e}[/dim red]")
 
-        console.print(f"\n[bold cyan]🤖 Aether:[/bold cyan] ", end="")
+
         
         for _ in range(10):
             function_calls = []
@@ -222,6 +225,10 @@ class YellowPatcher:
             start_time = time.time()
             turn_tokens = 0
             
+            from rich.live import Live
+            from rich.panel import Panel
+            from rich.markdown import Markdown
+
             with console.status("[dim]● Thinking...[/dim]", spinner="dots"):
                 response_stream = self.chat_session.send_message_stream(contents)
                 stream_iter = iter(response_stream)
@@ -230,37 +237,38 @@ class YellowPatcher:
                 except StopIteration:
                     first_chunk = None
 
-            def process_chunk(chunk):
-                nonlocal turn_tokens
-                if chunk.usage_metadata:
-                    total = getattr(chunk.usage_metadata, "total_token_count", 0)
-                    if total == 0:
-                        p = getattr(chunk.usage_metadata, "prompt_token_count", 0)
-                        c = getattr(chunk.usage_metadata, "candidates_token_count", 0)
-                        total = p + c
-                    SessionState.total_tokens += total
-                    turn_tokens = total
-                    
-                if not chunk.candidates:
-                    return
-                    
-                candidate = chunk.candidates[0]
-                if candidate.content and candidate.content.parts:
-                    for part in candidate.content.parts:
-                        if hasattr(part, "function_call") and part.function_call:
-                            function_calls.append(part.function_call)
-                        elif hasattr(part, "text") and part.text:
-                            text = part.text
-                            # Phase 2: Suppress CoT tags if present
-                            if "<thought>" in text or "</thought>" in text:
-                                continue
-                            text_parts.append(text)
-                            console.print(text, end="")
+            with Live(Panel(""), refresh_per_second=15, console=console) as live:
+                def process_chunk(chunk):
+                    nonlocal turn_tokens
+                    if chunk.usage_metadata:
+                        total = getattr(chunk.usage_metadata, "total_token_count", 0)
+                        if total == 0:
+                            p = getattr(chunk.usage_metadata, "prompt_token_count", 0)
+                            c = getattr(chunk.usage_metadata, "candidates_token_count", 0)
+                            total = p + c
+                        SessionState.total_tokens += total
+                        turn_tokens = total
+                        
+                    if not chunk.candidates:
+                        return
+                        
+                    candidate = chunk.candidates[0]
+                    if candidate.content and candidate.content.parts:
+                        for part in candidate.content.parts:
+                            if hasattr(part, "function_call") and part.function_call:
+                                function_calls.append(part.function_call)
+                            elif hasattr(part, "text") and part.text:
+                                text = part.text
+                                # Phase 2: Suppress CoT tags if present
+                                if "<thought>" in text or "</thought>" in text:
+                                    continue
+                                text_parts.append(text)
+                                live.update(Panel(Markdown("".join(text_parts)), title="🤖 Aether", border_style="cyan"))
 
-            if first_chunk:
-                process_chunk(first_chunk)
-                for chunk in stream_iter:
-                    process_chunk(chunk)
+                if first_chunk:
+                    process_chunk(first_chunk)
+                    for chunk in stream_iter:
+                        process_chunk(chunk)
                     
             duration = time.time() - start_time
             console.print(f"\n[dim]Dim: Thought for {duration:.1f}s, {turn_tokens} tokens[/dim]")
@@ -284,7 +292,6 @@ class YellowPatcher:
                 )
 
             contents = tool_responses
-            console.print(f"\n[bold cyan]🤖 Aether:[/bold cyan] ", end="")
 
         return "Maximum tool execution rounds reached."
 

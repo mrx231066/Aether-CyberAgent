@@ -94,13 +94,25 @@ def select_model_interactively(api_key: Optional[str] = None) -> str:
 @app.callback(invoke_without_command=True)
 def main(
     ctx: typer.Context,
-    skip_all_permissions: bool = typer.Option(False, "--skip-all-permissions", help="Enable Omni-Agent God Mode")
+    skip_all_permissions: bool = typer.Option(False, "--skip-all-permissions", help="Enable Omni-Agent God Mode"),
+    setup: bool = typer.Option(False, "--setup", help="Run interactive setup wizard"),
+    web: bool = typer.Option(False, "--web", help="Launch WebSocket Visualizer Sidecar")
 ):
     """Aether-CyberAgent: Autonomous AI Security Platform."""
     from aether.config import Config
     if skip_all_permissions:
         Config.GOD_MODE = True
         console.print("[bold red]⚡ GOD MODE ACTIVATED: Skipping all permissions.[/bold red]")
+
+    if setup:
+        from aether.cli.wizard import SetupWizard
+        SetupWizard.run_wizard()
+        return
+
+    if web:
+        from aether.web.server import run_server
+        run_server()
+        return
 
     if ctx.invoked_subcommand is None:
         os.system('clear' if os.name == 'posix' else 'cls')

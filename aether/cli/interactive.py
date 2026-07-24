@@ -23,7 +23,7 @@ console = Console()
 from aether.auth import load_config, save_config, authenticate
 
 REPL_BANNER = """[bold cyan]
-    █████╗ ███████╗████████╗██╗  ██╗███████╗██████╗        [bold white]v0.5.0[/bold white]
+    █████╗ ███████╗████████╗██╗  ██╗███████╗██████╗        [bold white]v1.0.0[/bold white]
    ██╔══██╗██╔════╝╚══██╔══╝██║  ██║██╔════╝██╔══██╗
    ███████║█████╗     ██║   ███████║█████╗  ██████╔╝
    ██╔══██║██╔══╝     ██║   ██╔══██║██╔══╝  ██╔══██╗
@@ -151,6 +151,25 @@ def handle_slash_command(command: str, api_key: str, model: str) -> Optional[str
     elif cmd == "/clear":
         os.system("clear" if os.name != "nt" else "cls")
 
+    elif cmd == "/logout":
+        from aether.config import SessionState
+        from aether.cli.main import CONFIG_PATH
+        if Confirm.ask("[bold red]Are you sure you want to logout? This will clear all credentials and configuration.[/bold red]"):
+            if CONFIG_PATH.exists():
+                CONFIG_PATH.unlink()
+            if "GEMINI_API_KEY" in os.environ:
+                del os.environ["GEMINI_API_KEY"]
+            SessionState.chat_history.clear()
+            console.print("[green]✅ Successfully logged out.[/green]")
+            return "EXIT"
+
+    elif cmd == "/theme":
+        from aether.cli.theme_engine import ThemeEngine
+        if args:
+            ThemeEngine.set_theme(args)
+        else:
+            console.print("[yellow]Usage: /theme <theme_name>[/yellow]")
+
     else:
         console.print(
             f"[yellow]Unknown command: {cmd}. Type /help for available commands.[/yellow]"
@@ -181,6 +200,8 @@ def _show_help():
     table.add_row("/quota", "Show token usage & estimated cost", "⚪ White")
     table.add_row("/run <script>", "Execute script in sandbox", "🟢 Green")
     table.add_row("/clear", "Clear terminal output", "—")
+    table.add_row("/theme <name>", "Switch UI color theme", "—")
+    table.add_row("/logout", "Logout and clear credentials", "—")
     table.add_row("/exit", "Close REPL session", "—")
     table.add_row("", "", "")
     table.add_row("[dim]<any text>[/dim]", "[dim]Chat with Aether AI agent[/dim]", "[dim]🟡 Yellow[/dim]")
@@ -364,7 +385,7 @@ def start_interactive_session():
     from prompt_toolkit.key_binding import KeyBindings
     from aether.cli.ui_header import TopHeader, toggle_mode
 
-    commands = ["/help", "/quota", "/diff", "/rollback", "/branch", "/mcp", "/skills", "/scan", "/model", "/auth", "/status", "/run", "/clear", "/exit"]
+    commands = ["/help", "/quota", "/diff", "/rollback", "/branch", "/mcp", "/skills", "/scan", "/model", "/auth", "/status", "/run", "/clear", "/exit", "/logout", "/theme"]
     completer = WordCompleter(commands, ignore_case=True)
     
     bindings = KeyBindings()
