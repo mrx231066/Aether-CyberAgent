@@ -400,13 +400,24 @@ class RedTeamAttacker:
 
         console.print("[bold red]🔴 Executing sandboxed PoC...[/bold red]")
         
-        # TODO: Implement real exploit-payload internals and Docker SDK execution path here.
-        # This pass focuses on the safety-relevant control flow.
-        
+        # Execute payload within the secure Sandbox container
         try:
+            from aether.engine.sandbox import IsolatedSandbox
             from aether.engine.quota import AuditLogger
-            AuditLogger.log_event("RED_TEAM", "POC_EXECUTION", f"Validated {cwe} on {target_file}")
-        except ImportError:
-            pass
-
-        return RedTeamResult("unknown", True, "Successfully reproduced finding using stubbed payload in Docker.", "sandbox_log_1")
+            
+            AuditLogger.log_event("RED_TEAM", "POC_EXECUTION", f"Validating {cwe} on {target_file}")
+            
+            with IsolatedSandbox() as sandbox:
+                # Deploy payload into sandbox
+                sandbox.write_file("payload.py", payload)
+                
+                # Execute safely
+                result = sandbox.execute("python payload.py", timeout=5.0)
+                
+                if result["exit_code"] == 0:
+                    return RedTeamResult("exploit_success", True, f"Exploit successful. Output: {result['stdout']}", result['stdout'])
+                else:
+                    return RedTeamResult("exploit_failed", False, f"Exploit failed or contained. Error: {result['stderr']}", "")
+                    
+        except Exception as e:
+            return RedTeamResult("sandbox_error", False, f"Failed to execute sandbox payload: {str(e)}", "")
