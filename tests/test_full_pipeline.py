@@ -204,7 +204,8 @@ class TestGeminiClientModelDiscovery:
         models = GeminiClient.get_available_models(api_key=None)
         assert isinstance(models, list)
         assert len(models) > 0
-        assert "gemini-2.5-flash" in models
+        model_names = [m["name"] for m in models]
+        assert any("gemini-" in name for name in model_names)
 
     def test_get_available_models_mock_discovery(self):
         from unittest.mock import MagicMock, patch
@@ -227,9 +228,10 @@ class TestGeminiClientModelDiscovery:
             mock_client_instance.models.list.return_value = [mock_m1, mock_m2, mock_m3]
 
             models = GeminiClient.get_available_models(api_key="fake_key")
-            assert "gemini-2.5-flash" in models
-            assert "gemini-2.5-pro" in models
-            assert "text-embedding-004" not in models
+            model_names = [m["name"] for m in models]
+            assert "gemini-2.5-flash" in model_names
+            assert "gemini-2.5-pro" in model_names
+            assert "text-embedding-004" not in model_names
 
     def test_gemini_client_custom_model(self):
         from unittest.mock import patch

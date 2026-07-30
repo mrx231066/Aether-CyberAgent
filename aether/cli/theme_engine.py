@@ -1,4 +1,4 @@
-"""Theme Engine for Aether-CyberAgent v1.0.0"""
+"""Theme Engine for Aether-CyberAgent v2.0.0"""
 import json
 from pathlib import Path
 from rich.console import Console

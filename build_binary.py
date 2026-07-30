@@ -1,4 +1,4 @@
-"""Nuitka Standalone Binary Build Script for Aether-CyberAgent v1.0.5"""
+"""Nuitka Standalone Binary Build Script for Aether-CyberAgent v2.0.0"""
 import subprocess
 from rich.console import Console
 from pathlib import Path

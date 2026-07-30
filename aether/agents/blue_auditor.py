@@ -1,6 +1,7 @@
 import ast
 import os
 import datetime
+from datetime import timezone
 from pathlib import Path
 from typing import List, Optional, Any
 from pydantic import BaseModel, Field
@@ -154,6 +155,7 @@ class BlueTeamAuditor:
 
         console.print(f"[bold blue]Starting Static Analysis Audit on {root_path}...[/bold blue]")
         
+        import os
         for root, _, files in os.walk(root_path):
             for file in files:
                 if file.endswith(".py"):
@@ -170,8 +172,25 @@ class BlueTeamAuditor:
             findings=all_findings,
             total_files_scanned=files_scanned,
             total_vulnerabilities=total_vulnerabilities,
-            scan_timestamp=datetime.datetime.utcnow().isoformat() + "Z"
+            scan_timestamp=datetime.datetime.now(timezone.utc).isoformat()
         )
+
+class IncidentResponse:
+    """Blue Team Incident Response & Containment (CISA Lifecycle)."""
+    
+    @staticmethod
+    def isolate_host(ip_address: str):
+        """Simulate host network isolation (EDR-style containment)."""
+        console.print(f"\n[bold blue]🔵 Blue Team: Triggering Containment for {ip_address}[/bold blue]")
+        console.print("  [dim]- Rotating localized credentials...[/dim]")
+        console.print("  [dim]- Dropping active network sessions...[/dim]")
+        
+        # We check if AuditLogger exists and log
+        try:
+            from aether.engine.quota import AuditLogger
+            AuditLogger.log_event("BLUE_TEAM", "CONTAINMENT", f"Isolated host {ip_address}", severity="CRITICAL")
+        except ImportError:
+            pass
 
     def get_source_snippet(self, file_path: str, line_number: int, context: int = 2) -> str:
         """Extract a code snippet around a specific line in a file."""

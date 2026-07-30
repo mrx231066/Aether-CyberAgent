@@ -34,7 +34,9 @@ class PurpleTeamVerifier:
     """Purple Team: Formal verification of security patches."""
     
     def verify_patch(self, original_code: str, patched_code: str, vulnerability_type: str) -> VerificationResult:
-        """Run full verification suite on a patch."""
+        """Main verification pipeline combining Z3 and Hypothesis."""
+        console.print("\n[bold magenta]🟣 Purple Team: Measuring Detection Gap & Verifying Patch[/bold magenta]")
+        console.print("  [dim]Evaluating MITRE ATT&CK mitigation success...[/dim]")
         details = []
         
         # Step 1: Z3 formal verification

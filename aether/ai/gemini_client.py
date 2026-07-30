@@ -27,13 +27,20 @@ class GeminiClient:
     response parsing from the LLM.
     """
     
-    DEFAULT_MODEL = "gemini-2.5-flash"
-    FALLBACK_MODELS = [
-        "gemini-2.5-flash",
-        "gemini-2.5-pro",
-        "gemini-2.0-flash",
-        "gemini-1.5-flash",
-        "gemini-1.5-pro",
+    DEFAULT_MODEL = "gemini-3.1-pro-preview"
+    DEFAULT_GEMINI_MODELS = [
+        {
+            "name": "gemini-3.1-pro-preview", 
+            "info": "⭐ Recommended - Advanced Maths, Vibe Coding & Code Architecture"
+        },
+        {
+            "name": "gemini-3.6-flash", 
+            "info": "⚡ New - All-Around Fast Agentic Help"
+        },
+        {
+            "name": "gemini-3.5-flash-lite", 
+            "info": "🚀 New - Ultra-Fast High-Throughput Sub-Agent"
+        },
     ]
     MODEL = DEFAULT_MODEL
     
@@ -45,29 +52,43 @@ class GeminiClient:
                 "or pass api_key to GeminiClient()."
             )
         self.model = model or os.environ.get("GEMINI_MODEL") or self.DEFAULT_MODEL
-        self.client = genai.Client(api_key=self.api_key)
+        
+        if self.api_key == "OAUTH_MODE":
+            try:
+                from google.oauth2.credentials import Credentials
+                from aether.auth import load_config
+                config = load_config()
+                if "oauth_creds" in config:
+                    creds = Credentials(**config["oauth_creds"])
+                    # Use credentials directly. Note: Vertex AI models usually require project ID.
+                    self.client = genai.Client(credentials=creds, http_options={'api_version': 'v1beta'})
+                else:
+                    raise ValueError("OAuth credentials not found in config.")
+            except Exception as e:
+                console.print(f"[bold red]❌ Failed to load OAuth credentials: {e}[/bold red]")
+                self.client = genai.Client(api_key="") # Will fail gracefully later
+        else:
+            self.client = genai.Client(api_key=self.api_key)
 
     @classmethod
-    def get_available_models(cls, api_key: Optional[str] = None) -> List[str]:
-        """Fetch available Gemini models dynamically using google-genai SDK.
-        
-        Filters for models supporting content generation and excludes legacy/deprecated models.
-        Falls back gracefully to recommended defaults if listing fails.
-        """
+    def get_available_models(cls, api_key: Optional[str] = None) -> List[dict]:
+        """Fetch available Gemini models dynamically using google-genai SDK."""
         key = api_key or os.environ.get("GEMINI_API_KEY", "")
         if not key:
             console.print("[yellow]⚠️  No API key provided for model discovery. Using default model list.[/yellow]")
-            return list(cls.FALLBACK_MODELS)
+            return cls.DEFAULT_GEMINI_MODELS
 
         try:
-            client = genai.Client(api_key=key)
+            if key == "OAUTH_MODE":
+                from google.oauth2.credentials import Credentials
+                from aether.auth import load_config
+                config = load_config()
+                creds = Credentials(**config.get("oauth_creds", {}))
+                client = genai.Client(credentials=creds, http_options={'api_version': 'v1beta'})
+            else:
+                client = genai.Client(api_key=key)
             models = list(client.models.list())
             discovered = []
-
-            exclude_keywords = [
-                "embedding", "imagen", "aqa", "bison", "gecko",
-                "text-", "chat-", "audio", "tts", "stt", "vision-legacy"
-            ]
 
             for m in models:
                 name = getattr(m, "name", "") or ""
@@ -80,33 +101,19 @@ class GeminiClient:
 
                 if supports_gen:
                     clean_name = name.replace("models/", "") if name.startswith("models/") else name
-                    if clean_name.startswith("gemini-") and not any(kw in clean_name.lower() for kw in exclude_keywords):
-                        if clean_name not in discovered:
-                            discovered.append(clean_name)
+                    if clean_name.startswith("gemini-"):
+                        if not any(d["name"] == clean_name for d in discovered):
+                            discovered.append({"name": clean_name, "info": "Dynamically Verified"})
 
             if discovered:
-                def model_sort_key(m_name: str) -> tuple:
-                    if "2.5-flash" in m_name:
-                        return (0, m_name)
-                    elif "2.5-pro" in m_name:
-                        return (1, m_name)
-                    elif "2.0-flash" in m_name:
-                        return (2, m_name)
-                    elif "1.5-flash" in m_name:
-                        return (3, m_name)
-                    elif "1.5-pro" in m_name:
-                        return (4, m_name)
-                    return (5, m_name)
-
-                discovered.sort(key=model_sort_key)
                 return discovered
 
             console.print("[yellow]⚠️  No compatible Gemini models found. Using default model list.[/yellow]")
-            return list(cls.FALLBACK_MODELS)
+            return cls.DEFAULT_GEMINI_MODELS
 
         except Exception as e:
             console.print(f"[yellow]⚠️  Failed to fetch models dynamically: {e}. Using default model list.[/yellow]")
-            return list(cls.FALLBACK_MODELS)
+            return cls.DEFAULT_GEMINI_MODELS
 
     def request_patch(
         self,

@@ -14,7 +14,7 @@ class SarifReporter:
     SCHEMA_URL = "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/main/sarif-2.1/schema/sarif-schema-2.1.0.json"
     VERSION = "2.1.0"
     DRIVER_NAME = "aether-cyberagent"
-    DRIVER_VERSION = "0.1.0"
+    DRIVER_VERSION = "2.0.0"
 
     def _map_severity(self, severity: str) -> str:
         """Map internal severity to SARIF level."""

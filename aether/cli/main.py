@@ -32,7 +32,7 @@ BANNER = """[bold cyan]
    ╔═══════════════════════════════════════════════╗
    ║          🛡️  AETHER-CYBERAGENT  🛡️            ║
    ║   Autonomous Multi-Agent AI Security Platform  ║
-   ║              v0.2.0 · Defense Only             ║
+   ║            v2.0.0 · Defense Only               ║
    ╚═══════════════════════════════════════════════╝
 [/bold cyan]"""
 
@@ -65,18 +65,20 @@ def select_model_interactively(api_key: Optional[str] = None) -> str:
     available_models = GeminiClient.get_available_models(api_key=api_key)
 
     if not sys.stdin.isatty():
-        default_model = available_models[0] if available_models else GeminiClient.DEFAULT_MODEL
+        default_model = available_models[0]["name"] if available_models else GeminiClient.DEFAULT_MODEL
         console.print(f"[dim]Non-interactive environment detected. Using default model: {default_model}[/dim]")
         return default_model
 
     table = Table(title="🤖 Discovered Gemini Models", box=box.ROUNDED, border_style="cyan")
     table.add_column("#", style="bold yellow", justify="right")
     table.add_column("Model Name", style="bold white")
-    table.add_column("Recommendation", style="green")
+    table.add_column("Info", style="green")
 
-    for idx, m_name in enumerate(available_models, 1):
-        rec = "⭐ Recommended" if m_name == GeminiClient.DEFAULT_MODEL else "Available"
-        table.add_row(str(idx), m_name, rec)
+    for idx, m_dict in enumerate(available_models, 1):
+        name = m_dict.get("name", "")
+        info = m_dict.get("info", "")
+        rec = "⭐ Recommended" if name == GeminiClient.DEFAULT_MODEL else info
+        table.add_row(str(idx), name, rec)
 
     console.print(table)
 
@@ -86,9 +88,10 @@ def select_model_interactively(api_key: Optional[str] = None) -> str:
         choices=choices,
         default="1",
     )
-    selected = available_models[int(choice) - 1]
+    selected = available_models[int(choice) - 1]["name"]
     console.print(f"[bold green]Selected model: {selected}[/bold green]\n")
     return selected
+
 
 
 @app.callback(invoke_without_command=True)
@@ -173,16 +176,29 @@ def scan(
 
     from aether.agents.gold_autonomic import AutonomicEngine
     from aether.reports.sarif import SarifReporter
+    from aether.reports.html_report import HtmlReporter
+    from aether.agents.red_attacker import RedTeamAttacker
 
     try:
         engine = AutonomicEngine(max_retries=max_retries, api_key=effective_api_key, model=selected_model)
         result = engine.execute_scan(str(target))
 
+        # Red Team attack surface enumeration
+        console.print("\n[bold red]🔴 Red Team: Running attack surface enumeration...[/bold red]")
+        red_team = RedTeamAttacker()
+        red_report = red_team.enumerate_attack_surface(str(target))
+
         # Generate SARIF report
-        if result.vulnerabilities_found > 0:
+        red_report_for_html = red_report
+        if result.vulnerabilities_found > 0 or red_report.vectors:
             reporter = SarifReporter()
             sarif_path = reporter.export_from_pipeline(result, ".aether/reports")
             console.print(f"\n[bold white]📋 SARIF report saved: {sarif_path}[/bold white]")
+
+            # Generate HTML report
+            html_reporter = HtmlReporter()
+            html_path = html_reporter.export_from_pipeline(result, ".aether/reports", red_report_for_html)
+            console.print(f"[bold white]📄 HTML report saved: {html_path}[/bold white]")
 
         # Display final directory tree
         if result.verified_patches:
@@ -265,5 +281,90 @@ def dashboard():
     )
 
 
+@app.command()
+def watch(
+    path: str = typer.Argument(".", help="Path to watch for changes"),
+    debounce: float = typer.Option(2.0, "--debounce", "-d", help="Debounce delay in seconds"),
+):
+    """🔄 Watch a directory for changes and auto-scan for vulnerabilities."""
+    console.print(BANNER)
+    from aether.engine.watcher import AetherWatcher
+
+    config = load_aether_config()
+    api_key = os.environ.get("GEMINI_API_KEY") or config.get("api_key")
+    model = config.get("model")
+
+    watcher = AetherWatcher(
+        target_path=path,
+        api_key=api_key,
+        model=model,
+        debounce_seconds=debounce,
+    )
+    watcher.start()
+
+
+@app.command()
+def redscan(
+    path: str = typer.Argument(".", help="Path to enumerate attack surface"),
+):
+    """🔴 Run Red Team attack surface enumeration on the target path."""
+    console.print(BANNER)
+
+    target = Path(path).resolve()
+    if not target.exists():
+        console.print(f"[bold red]❌ Path does not exist: {path}[/bold red]")
+        raise typer.Exit(code=1)
+
+    from aether.agents.red_attacker import RedTeamAttacker
+
+    attacker = RedTeamAttacker()
+    report = attacker.enumerate_attack_surface(str(target))
+
+    if report.vectors:
+        console.print(f"\n[bold red]⚠️  {len(report.vectors)} attack vector(s) found.[/bold red]")
+    else:
+        console.print("\n[bold green]✅ No attack vectors found. Attack surface is minimal.[/bold green]")
+
+
+@app.command()
+def quota():
+    """💰 Show API token usage and remaining budget."""
+    console.print(BANNER)
+    from aether.engine.quota import QuotaEngine
+    from rich.table import Table
+    from rich import box
+    
+    stats = QuotaEngine.get_stats()
+    
+    table = Table(title="💰 Global Quota Engine", box=box.ROUNDED, border_style="green")
+    table.add_column("Metric", style="bold white")
+    table.add_column("Value", style="bold yellow", justify="right")
+    
+    table.add_row("Total Tokens Used", f"{stats['tokens']:,}")
+    table.add_row("Estimated Spend", f"${stats['cost']:.4f}")
+    table.add_row("Budget Limit", f"${stats['limit']:.2f}")
+    
+    console.print(table)
+    
+    if stats['exceeded']:
+        console.print("\n[bold red]⚠️ BUDGET LIMIT EXCEEDED. Agent operations are suspended.[/bold red]")
+    else:
+        remaining = stats['limit'] - stats['cost']
+        console.print(f"\n[bold green]✅ Remaining budget: ${remaining:.4f}[/bold green]")
+
+
+@app.command()
+def plugins():
+    """🔌 List and manage loaded plugins."""
+    console.print(BANNER)
+
+    from aether.engine.plugins import PluginManager
+
+    manager = PluginManager()
+    manager.discover_and_load()
+    manager.list_plugins()
+
+
 if __name__ == "__main__":
     app()
+

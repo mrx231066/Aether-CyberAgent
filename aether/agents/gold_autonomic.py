@@ -85,6 +85,21 @@ class AutonomicEngine:
         Returns:
             PipelineResult containing the scan results.
         """
+        from aether.engine.quota import AuditLogger, QuotaEngine
+        from aether.agents.orange_intel import OrangeTeamIntel
+
+        self.state_log = []
+        start_time = time.time()
+        
+        AuditLogger.log_event("GOLD_TEAM", "SCAN_START", f"Target: {target_path}")
+
+        # Step 0: Orange Team OSINT
+        orange_team = OrangeTeamIntel()
+        orange_team.monitor_public_feeds()
+        orange_team.report_intel()
+
+        # Step 1: Blue Team Static Analysis
+        self._log_state("blue_team_start", phase="audit")
         self.state.start_time = time.time()
         self.state.phase = 'initializing'
         
@@ -297,7 +312,7 @@ class AutonomicEngine:
         banner = Panel(
             "[bold cyan]🛡️  AETHER-CYBERAGENT[/]\n"
             "[dim]Autonomous Multi-Agent AI Security Platform[/]\n"
-            f"[dim]v0.1.0 | {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}[/]",
+            f"[dim]v2.0.0 | {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}[/]",
             box=box.DOUBLE,
             border_style="cyan",
             padding=(1, 4),

@@ -1,4 +1,4 @@
-"""WebSocket Visualizer Sidecar for Aether-CyberAgent v1.0.0"""
+"""WebSocket Visualizer Sidecar for Aether-CyberAgent v2.0.0"""
 import uvicorn
 from fastapi import FastAPI, WebSocket
 from fastapi.responses import HTMLResponse

@@ -23,7 +23,7 @@ console = Console()
 from aether.auth import load_config, save_config, authenticate
 
 REPL_BANNER = """[bold cyan]
-    █████╗ ███████╗████████╗██╗  ██╗███████╗██████╗        [bold white]v1.1.0[/bold white]
+    █████╗ ███████╗████████╗██╗  ██╗███████╗██████╗        [bold white]v2.0.0[/bold white]
    ██╔══██╗██╔════╝╚══██╔══╝██║  ██║██╔════╝██╔══██╗
    ███████║█████╗     ██║   ███████║█████╗  ██████╔╝
    ██╔══██║██╔══╝     ██║   ██╔══██║██╔══╝  ██╔══██╗
@@ -44,23 +44,24 @@ def _select_model(api_key: str) -> str:
         models = GeminiClient.get_available_models(api_key=api_key)
 
     if not sys.stdin.isatty():
-        return models[0] if models else GeminiClient.DEFAULT_MODEL
+        return models[0]["name"] if models else GeminiClient.DEFAULT_MODEL
 
     table = Table(title="🤖 Available Models", box=box.ROUNDED, border_style="cyan")
     table.add_column("#", style="bold yellow", justify="right")
     table.add_column("Model", style="bold white")
     table.add_column("Info", style="green")
 
-    for idx, m in enumerate(models, 1):
-        info = "⭐ Recommended" if m == GeminiClient.DEFAULT_MODEL else "Available"
-        table.add_row(str(idx), m, info)
+    for idx, m_dict in enumerate(models, 1):
+        name = m_dict.get("name", "")
+        info = m_dict.get("info", "")
+        table.add_row(str(idx), name, info)
 
     console.print(table)
     choices = [str(i) for i in range(1, len(models) + 1)]
     choice = Prompt.ask(
         "[bold yellow]Select model[/bold yellow]", choices=choices, default="1"
     )
-    selected = models[int(choice) - 1]
+    selected = models[int(choice) - 1]["name"]
     console.print(f"[green]✅ Default model set to: {selected}[/green]\n")
     return selected
 
@@ -170,6 +171,107 @@ def handle_slash_command(command: str, api_key: str, model: str) -> Optional[str
         else:
             console.print("[yellow]Usage: /theme <theme_name>[/yellow]")
 
+    elif cmd == "/redscan":
+        _run_redscan(args or ".")
+
+    elif cmd == "/plugins":
+        from aether.engine.plugins import PluginManager
+        manager = PluginManager()
+        manager.discover_and_load()
+        manager.list_plugins()
+
+    elif cmd == "/yolo":
+        from aether.config import SessionState
+        if args == "off":
+            SessionState.yolo_mode = False
+            console.print("🛡️ [bold blue]YOLO MODE DISABLED[/bold blue]\nNormal approval workflow restored.")
+        else:
+            SessionState.yolo_mode = True
+            console.print("⚡ [bold yellow]YOLO MODE ENABLED[/bold yellow]\nRoutine authorized actions will execute automatically. High-risk and restricted operations remain protected by policy.")
+
+    elif cmd == "/update":
+        from aether.engine.self_update import SelfUpdateEngine
+        if args == "check":
+            SelfUpdateEngine.check_for_update(auto_check=True)
+        elif args == "apply":
+            SelfUpdateEngine.apply_update()
+        else:
+            console.print("[yellow]Usage: /update check | /update apply[/yellow]")
+
+    elif cmd == "/provider":
+        from aether.ai.provider_manager import ProviderManager
+        from aether.ai.providers.google_gemini import GoogleGeminiAdapter
+        
+        # Auto-register stub for demo
+        ProviderManager.register(GoogleGeminiAdapter())
+        
+        if not args:
+            ProviderManager.status()
+        elif args == "add":
+            console.print("\n╭──────────────────────────────────────╮")
+            console.print("│       [bold cyan]ADD AI PROVIDER[/bold cyan]                │")
+            console.print("├──────────────────────────────────────┤")
+            console.print("│ 1. OpenAI                            │")
+            console.print("│ 2. Anthropic Claude                  │")
+            console.print("│ 3. Google Gemini                     │")
+            console.print("│ 4. Moonshot AI / Kimi                │")
+            console.print("│ 5. Z.ai / GLM                        │")
+            console.print("│ 6. OpenRouter                        │")
+            console.print("│ 7. Import Custom Provider            │")
+            console.print("╰──────────────────────────────────────╯")
+            
+            choice = Prompt.ask("Select provider", choices=[str(i) for i in range(1, 8)])
+            if choice == "3":
+                provider = GoogleGeminiAdapter()
+                ProviderManager.register(provider)
+                if provider.authenticate():
+                    ProviderManager.switch_provider("google_gemini")
+                    ProviderManager.refresh_models("google_gemini")
+            else:
+                console.print(f"[dim]Provider {choice} adapter stub initialized...[/dim]")
+
+    elif cmd == "/model":
+        from aether.ai.provider_manager import ProviderManager
+        provider = ProviderManager.get_active_provider()
+        
+        if not provider:
+            console.print("[bold red]❌ No active provider. Use /provider add first.[/bold red]")
+            return
+            
+        if args == "refresh":
+            ProviderManager.refresh_models(provider.name)
+            return
+
+        models = ProviderManager._model_registry.get(provider.name, [])
+        if not models:
+            console.print("[bold red]❌ No models discovered. Run /model refresh.[/bold red]")
+            return
+            
+        console.print("\n╭─────────────────────────────────────────────╮")
+        console.print(f"│        [bold cyan]AVAILABLE {provider.display_name.upper()} MODELS[/bold cyan]              │")
+        console.print("├─────────────────────────────────────────────┤")
+        
+        for i, m in enumerate(models, 1):
+            active_marker = "*" if m.model_id == ProviderManager._active_model_id else " "
+            console.print(f"│ {i}. {active_marker} {m.display_name:<33} │")
+            
+        console.print("│                                             │")
+        console.print("│ R. Refresh Models                           │")
+        console.print("│ C. Continue                                 │")
+        console.print("╰─────────────────────────────────────────────╯")
+        
+        choice = Prompt.ask("Select model", choices=[str(i) for i in range(1, len(models)+1)] + ["R", "r", "C", "c"])
+        if choice.upper() == "R":
+            ProviderManager.refresh_models(provider.name)
+        elif choice.upper() != "C":
+            idx = int(choice) - 1
+            ProviderManager.set_active_model(models[idx].model_id)
+            console.print(f"[bold green]✓ Active model set to: {models[idx].display_name}[/bold green]")
+
+    elif cmd == "/tasks":
+        from aether.engine.tasks import TaskEngine
+        TaskEngine.list_tasks()
+
     else:
         console.print(
             f"[yellow]Unknown command: {cmd}. Type /help for available commands.[/yellow]"
@@ -199,6 +301,8 @@ def _show_help():
     table.add_row("/status", "Show session state & graph metrics", "⚪ White")
     table.add_row("/quota", "Show token usage & estimated cost", "⚪ White")
     table.add_row("/run <script>", "Execute script in sandbox", "🟢 Green")
+    table.add_row("/redscan [path]", "Run Red Team attack surface scan", "🔴 Red")
+    table.add_row("/plugins", "List loaded plugins", "🔌")
     table.add_row("/clear", "Clear terminal output", "—")
     table.add_row("/theme <name>", "Switch UI color theme", "—")
     table.add_row("/logout", "Logout and clear credentials", "—")
@@ -258,6 +362,28 @@ def _run_scan(path: str, api_key: str, model: str):
     except Exception as e:
         console.print(f"[bold red]❌ Scan error: {e}[/bold red]")
 
+
+def _run_redscan(path: str):
+    """Execute Red Team attack surface enumeration."""
+    from aether.agents.red_attacker import RedTeamAttacker
+
+    target = Path(path).resolve()
+    if not target.exists():
+        console.print(f"[bold red]❌ Path not found: {path}[/bold red]")
+        return
+
+    try:
+        console.print(f"[bold red]🔴 Red Team: Enumerating attack surface on: {target}[/bold red]")
+        attacker = RedTeamAttacker()
+        with console.status("[bold green]Agent working...[/bold green]", spinner="circle"):
+            report = attacker.enumerate_attack_surface(str(target))
+
+        if report.vectors:
+            console.print(f"[bold red]⚠️  {len(report.vectors)} attack vector(s) found.[/bold red]")
+        else:
+            console.print("[bold green]✅ No attack vectors found.[/bold green]")
+    except Exception as e:
+        console.print(f"[bold red]❌ Red Team error: {e}[/bold red]")
 
 def _show_status(model: str):
     """Display current session status and dependency graph metrics."""
@@ -385,7 +511,7 @@ def start_interactive_session():
     from prompt_toolkit.key_binding import KeyBindings
     from aether.cli.ui_header import TopHeader, toggle_mode
 
-    commands = ["/help", "/quota", "/diff", "/rollback", "/branch", "/mcp", "/skills", "/scan", "/model", "/auth", "/status", "/run", "/clear", "/exit", "/logout", "/theme"]
+    commands = ["/help", "/quota", "/diff", "/rollback", "/branch", "/mcp", "/skills", "/scan", "/model", "/auth", "/status", "/run", "/clear", "/exit", "/logout", "/theme", "/redscan", "/plugins"]
     completer = WordCompleter(commands, ignore_case=True)
     
     bindings = KeyBindings()

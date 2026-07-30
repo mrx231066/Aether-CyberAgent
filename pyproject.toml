@@ -4,18 +4,33 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "aether-cyberagent"
-version = "1.1.0"
-description = "Elite AI security engineer and autonomous developer agent."
+version = "2.0.0"
+description = "Autonomous Multi-Agent AI Security Platform & Terminal Co-Pilot — Deterministic CS × Probabilistic AI."
 authors = [{ name = "Jashan Nain", email = "jashan@example.com" }]
 license = { text = "MIT" }
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
+keywords = ["security", "ai", "agent", "cybersecurity", "ast", "pentest", "gemini", "multi-agent"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Information Technology",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Security",
+    "Topic :: Software Development :: Quality Assurance",
+    "Topic :: Software Development :: Testing",
+    "Typing :: Typed",
+]
 dependencies = [
     "typer>=0.15.1",
     "rich>=13.9.4",
     "google-genai>=0.5.0",
     "pydantic>=2.10.6",
-    "pytest>=8.3.4",
     "google-auth-oauthlib>=1.2.0",
     "Pillow>=10.0.0",
     "prompt_toolkit>=3.0.43",
@@ -23,8 +38,28 @@ dependencies = [
     "networkx",
     "hypothesis",
     "docker",
-    "streamlit"
+    "streamlit",
+    "watchdog>=4.0.0",
+    "jinja2>=3.1.0",
 ]
+
+[project.optional-dependencies]
+web = ["fastapi>=0.110.0", "uvicorn>=0.27.0"]
+dashboard = ["pandas>=2.0.0"]
+dev = ["pytest>=8.3.4", "ruff", "nuitka"]
+all = ["aether-cyberagent[web,dashboard,dev]"]
+
+[project.urls]
+Homepage = "https://github.com/mrx231066/Aether-CyberAgent"
+Repository = "https://github.com/mrx231066/Aether-CyberAgent"
+Issues = "https://github.com/mrx231066/Aether-CyberAgent/issues"
 
 [project.scripts]
 aether = "aether.cli.main:app"
+
+[tool.setuptools.packages.find]
+include = ["aether*"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120

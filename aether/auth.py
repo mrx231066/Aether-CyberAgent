@@ -42,7 +42,6 @@ def authenticate() -> Tuple[Optional[str], Optional[str]]:
         if choice == "1":
             try:
                 from google_auth_oauthlib.flow import InstalledAppFlow
-                # Assuming client_secrets.json is present in the current directory or home directory
                 client_secrets = Path.home() / "client_secrets.json"
                 if not client_secrets.exists():
                     console.print("[bold red]❌ client_secrets.json not found in home directory. Falling back to API Key.[/bold red]")
@@ -50,16 +49,23 @@ def authenticate() -> Tuple[Optional[str], Optional[str]]:
                 else:
                     flow = InstalledAppFlow.from_client_secrets_file(
                         str(client_secrets),
-                        scopes=["openid", "https://www.googleapis.com/auth/userinfo.email", "https://www.googleapis.com/auth/userinfo.profile"]
+                        scopes=["openid", "https://www.googleapis.com/auth/userinfo.email", "https://www.googleapis.com/auth/userinfo.profile", "https://www.googleapis.com/auth/cloud-platform"]
                     )
-                    credentials = flow.run_local_server(port=0)
+                    console.print("[bold cyan]Opening local server for OAuth... please click the link provided below![/bold cyan]")
+                    credentials = flow.run_local_server(port=0, open_browser=False)
                     console.print(f"[green]✅ Authenticated via OAuth as {credentials.id_token}[/green]\n")
-                    # In a real app we'd use this to get a GCP token, but for now we'll just save it if possible
-                    # Gemini API generally requires an API Key or GCP service account.
-                    # We will store a placeholder or actual key if retrieved.
-                    api_key = credentials.token
-                    os.environ["GEMINI_API_KEY"] = api_key
-                    save_config({"api_key": api_key, "oauth": True})
+                    
+                    creds_dict = {
+                        "token": credentials.token,
+                        "refresh_token": credentials.refresh_token,
+                        "token_uri": credentials.token_uri,
+                        "client_id": credentials.client_id,
+                        "client_secret": credentials.client_secret,
+                        "scopes": credentials.scopes
+                    }
+                    save_config({"oauth_creds": creds_dict, "api_key": "OAUTH_MODE"})
+                    api_key = "OAUTH_MODE"
+                    os.environ["GEMINI_API_KEY"] = "OAUTH_MODE"
             except Exception as e:
                 console.print(f"[bold red]❌ OAuth flow failed: {e}[/bold red]")
                 api_key = _prompt_api_key()
