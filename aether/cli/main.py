@@ -102,6 +102,9 @@ def main(
     web: bool = typer.Option(False, "--web", help="Launch WebSocket Visualizer Sidecar")
 ):
     """Aether-CyberAgent: Autonomous AI Security Platform."""
+    from aether.engine.integrity import verify_self_integrity
+    verify_self_integrity()
+    
     from aether.config import Config
     if skip_all_permissions:
         Config.GOD_MODE = True
