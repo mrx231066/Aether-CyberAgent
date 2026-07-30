@@ -32,26 +32,37 @@ class SilverGuardian(threading.Thread):
     def _verify_boundaries(self, state):
         # 1. Check chat history
         violation_found = False
-        for msg in list(state.chat_history):
-            if any(pat in msg.lower() for pat in self.dangerous_patterns):
+        
+        # history is a List[Dict] or List[Any] depending on provider
+        for msg in list(state.history):
+            # Extract content robustly
+            if isinstance(msg, dict):
+                content = str(msg.get("content", "")).lower()
+            elif hasattr(msg, "parts"):  # Gemini format
+                content = " ".join([p.text for p in msg.parts if hasattr(p, "text")]).lower()
+            else:
+                content = str(msg).lower()
+                
+            if any(pat in content for pat in self.dangerous_patterns):
                 violation_found = True
                 break
                 
         # 2. Check active OS subprocesses
+        import subprocess
         try:
             ps = subprocess.run(["ps", "aux"], capture_output=True, text=True)
             if any(pat in ps.stdout.lower() for pat in self.dangerous_patterns):
                 violation_found = True
         except Exception:
             pass
-            
+
         if violation_found:
             self._remediate(state)
 
     def _remediate(self, state):
         console.print("\n[bold red][Silver Team] Ethical boundary violation detected. Halting operation.[/bold red]")
         # Purge dangerous context
-        state.chat_history.clear()
+        state.history.clear()
         # In a real scenario we might signal the main thread to inject a system prompt,
         # but here we can just clear the history and rely on the agent's base prompt.
         console.print("[dim red]Context purged and ethical boundaries re-established.[/dim red]\n")
