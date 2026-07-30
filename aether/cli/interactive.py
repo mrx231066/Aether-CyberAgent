@@ -203,7 +203,8 @@ def handle_slash_command(command: str, api_key: str, model: str) -> Optional[str
         from aether.ai.providers.google_gemini import GoogleGeminiAdapter
         
         # Auto-register stub for demo
-        ProviderManager.register(GoogleGeminiAdapter())
+        if "google_gemini" not in ProviderManager._providers:
+            ProviderManager.register(GoogleGeminiAdapter())
         
         if not args:
             ProviderManager.status()
@@ -229,6 +230,57 @@ def handle_slash_command(command: str, api_key: str, model: str) -> Optional[str
                     ProviderManager.refresh_models("google_gemini")
             else:
                 console.print(f"[dim]Provider {choice} adapter stub initialized...[/dim]")
+        elif args == "list":
+            console.print("\n[bold cyan]🔌 Configured Providers:[/bold cyan]")
+            for p_name, p_obj in ProviderManager._providers.items():
+                active = "*" if p_name == ProviderManager._active_provider_name else " "
+                console.print(f" {active} {p_obj.display_name} ({p_name})")
+        elif args.startswith("remove "):
+            p_name = args.split(" ", 1)[1]
+            if p_name in ProviderManager._providers:
+                ProviderManager._providers[p_name].disconnect()
+                del ProviderManager._providers[p_name]
+                if ProviderManager._active_provider_name == p_name:
+                    ProviderManager._active_provider_name = None
+                    ProviderManager._active_model_id = None
+                console.print(f"[green]✅ Provider {p_name} removed.[/green]")
+            else:
+                console.print(f"[red]❌ Provider {p_name} not found.[/red]")
+        elif args.startswith("use "):
+            p_name = args.split(" ", 1)[1]
+            try:
+                ProviderManager.switch_provider(p_name)
+                console.print(f"[green]✅ Switched to provider {p_name}[/green]")
+            except Exception as e:
+                console.print(f"[red]❌ {e}[/red]")
+        elif args.startswith("test "):
+            p_name = args.split(" ", 1)[1]
+            provider = ProviderManager._providers.get(p_name)
+            if provider:
+                console.print(f"[dim]Testing connection to {provider.display_name}...[/dim]")
+                if provider.health_check():
+                    console.print(f"[green]✅ Connection to {provider.display_name} successful.[/green]")
+                else:
+                    console.print(f"[red]❌ Connection to {provider.display_name} failed.[/red]")
+            else:
+                console.print(f"[red]❌ Provider {p_name} not found.[/red]")
+        elif args.startswith("models "):
+            p_name = args.split(" ", 1)[1]
+            models = ProviderManager._model_registry.get(p_name, [])
+            if models:
+                console.print(f"\n[bold cyan]📦 Models for {p_name}:[/bold cyan]")
+                for m in models:
+                    console.print(f" - {m.display_name} ({m.model_id})")
+            else:
+                console.print(f"[yellow]No models found for {p_name}. Try /provider refresh {p_name}[/yellow]")
+        elif args.startswith("refresh "):
+            p_name = args.split(" ", 1)[1]
+            try:
+                ProviderManager.refresh_models(p_name)
+            except Exception as e:
+                console.print(f"[red]❌ Refresh failed: {e}[/red]")
+        else:
+            console.print("[yellow]Invalid /provider command. Try add, list, remove, use, test, models, refresh.[/yellow]")
 
     elif cmd == "/model":
         from aether.ai.provider_manager import ProviderManager
