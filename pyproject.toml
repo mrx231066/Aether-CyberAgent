@@ -27,6 +27,8 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
+    "fastapi>=0.110.0",
+    "uvicorn>=0.27.0",
     "typer>=0.15.1",
     "rich>=13.9.4",
     "google-genai>=0.5.0",
@@ -44,7 +46,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-web = ["fastapi>=0.110.0", "uvicorn>=0.27.0"]
+web = []
 dashboard = ["pandas>=2.0.0"]
 dev = ["pytest>=8.3.4", "ruff", "nuitka"]
 all = ["aether-cyberagent[web,dashboard,dev]"]
