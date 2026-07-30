@@ -543,14 +543,19 @@ def start_interactive_session():
 
     console.print(REPL_BANNER)
 
-    # Step 1: Authentication & configuration
-    api_key, model = authenticate()
+    # Step 1: Check ProviderManager for authentication
+    active_provider = ProviderManager.get_active_provider()
+    model = ProviderManager._active_model_id if active_provider else "None (Use /provider add)"
+
+    if not active_provider:
+        console.print("[dim yellow]No AI Provider configured. You are in offline mode. Type /provider add to set one up.[/dim yellow]\n")
 
     console.print(
         Panel(
+            f"[bold white]Provider:[/bold white] {active_provider.display_name if active_provider else 'Not Configured'}\n"
             f"[bold white]Model:[/bold white] {model}\n"
             f"[bold white]Directory:[/bold white] {Path.cwd()}\n"
-            f"[bold white]Commands:[/bold white] Type [bold yellow]/help[/bold yellow] for reference",
+            f"[bold white]Commands:[/bold white] Type [bold yellow]/help[/bold yellow] or [bold yellow]/provider[/bold yellow] for setup",
             title="🚀 Session Active",
             border_style="green",
             box=box.ROUNDED,
