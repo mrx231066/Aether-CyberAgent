@@ -1,4 +1,4 @@
-"""Privilege-Aware Execution Engine (Green Team) for Aether-CyberAgent v2.0.0"""
+"""Privilege-Aware Execution Engine (Green Team) for Aether-CyberAgent v4.0.0"""
 import subprocess
 from rich.console import Console
 from aether.engine.capabilities import CapabilityDetector

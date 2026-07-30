@@ -1,4 +1,4 @@
-"""Interactive Setup Wizard for Aether-CyberAgent v2.0.0"""
+"""Interactive Setup Wizard for Aether-CyberAgent v4.0.0"""
 import sys
 from rich.console import Console
 from rich.prompt import Prompt, Confirm

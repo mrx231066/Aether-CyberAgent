@@ -1,4 +1,4 @@
-"""Centralized Error Taxonomy for Aether (v3.0.0)."""
+"""Centralized Error Taxonomy for Aether (v4.0.0)."""
 
 class AetherError(Exception):
     """Base exception for all Aether operations."""

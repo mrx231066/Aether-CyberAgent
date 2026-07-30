@@ -1,4 +1,4 @@
-"""Global Quota Engine and Immutable Audit Logger for Aether-CyberAgent v2.0.0"""
+"""Global Quota Engine and Immutable Audit Logger for Aether-CyberAgent v4.0.0"""
 
 import json
 from pathlib import Path

@@ -1,4 +1,4 @@
-"""Hybrid LLM Router for Aether-CyberAgent v2.0.0"""
+"""Hybrid LLM Router for Aether-CyberAgent v4.0.0"""
 from aether.config import Config
 from aether.ai.local_llm import OllamaClient
 from rich.console import Console

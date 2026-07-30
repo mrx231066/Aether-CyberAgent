@@ -1,4 +1,4 @@
-"""Event Bus for decoupled UI/Backend communication (v3.0.0)."""
+"""Event Bus for decoupled UI/Backend communication (v4.0.0)."""
 
 from typing import Callable, Dict, List, Any
 

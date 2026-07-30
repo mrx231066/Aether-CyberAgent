@@ -1,4 +1,4 @@
-"""Foreground/Background Task Orchestration Engine for Aether-CyberAgent v2.0.0"""
+"""Foreground/Background Task Orchestration Engine for Aether-CyberAgent v4.0.0"""
 
 import uuid
 import threading
@@ -27,7 +27,7 @@ from aether.engine.events import EventBus
 from aether.engine.errors import TaskExecutionError
 
 class TaskEngine:
-    """Hardened Background Task Orchestrator (v3.0.0)."""
+    """Hardened Background Task Orchestrator (v4.0.0)."""
     
     _executor = concurrent.futures.ThreadPoolExecutor(max_workers=10, thread_name_prefix="AetherWorker")
     _futures: Dict[str, concurrent.futures.Future] = {}

@@ -1,4 +1,4 @@
-"""Orange Team: Threat Intelligence & Adversary Emulation (v2.0.0).
+"""Orange Team: Threat Intelligence & Adversary Emulation (v4.0.0).
 
 Monitors public threat intelligence, Tor-related infrastructure, and OSINT
 to correlate external threats with internal telemetry.

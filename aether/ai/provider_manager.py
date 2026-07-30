@@ -1,4 +1,4 @@
-"""Provider Manager for Aether-CyberAgent (v2.0.0).
+"""Provider Manager for Aether-CyberAgent (v4.0.0).
 
 Handles active routing, fallbacks, and the unified model registry.
 """

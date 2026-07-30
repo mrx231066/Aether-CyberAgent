@@ -1,4 +1,4 @@
-"""Global configuration state for Aether-CyberAgent v2.0.0."""
+"""Global configuration state for Aether-CyberAgent v4.0.0."""
 from dataclasses import dataclass, field
 from typing import List, Dict, Any
 
