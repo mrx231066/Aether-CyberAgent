@@ -1,4 +1,4 @@
-"""Transactional SQLite Database Engine for Aether (v4.0.0)."""
+"""Transactional SQLite Database Engine for Aether (v4.0.1)."""
 
 import sqlite3
 import threading

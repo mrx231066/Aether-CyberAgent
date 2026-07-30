@@ -1,4 +1,4 @@
-"""HTML Report Generator for Aether-CyberAgent v4.0.0.
+"""HTML Report Generator for Aether-CyberAgent v4.0.1.
 
 Generates rich, standalone HTML security reports using Jinja2 templates.
 """
@@ -109,7 +109,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     <header>
         <h1>🛡️ AETHER-CYBERAGENT</h1>
         <div class="subtitle">Autonomous Multi-Agent AI Security Report</div>
-        <div class="subtitle">Generated: {{ timestamp }} | v4.0.0</div>
+        <div class="subtitle">Generated: {{ timestamp }} | v4.0.1</div>
     </header>
 
     <div class="metrics">

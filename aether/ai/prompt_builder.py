@@ -1,4 +1,4 @@
-"""Prompt Builder for Aether-CyberAgent v4.0.0"""
+"""Prompt Builder for Aether-CyberAgent v4.0.1"""
 from aether.engine.custom_instructions import InstructionParser
 
 AETHER_IDENTITY_PROMPT = """

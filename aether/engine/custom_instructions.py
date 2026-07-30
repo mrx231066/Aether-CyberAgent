@@ -1,4 +1,4 @@
-"""Custom Instruction Parser for Aether-CyberAgent v4.0.0"""
+"""Custom Instruction Parser for Aether-CyberAgent v4.0.1"""
 from pathlib import Path
 
 class InstructionParser:

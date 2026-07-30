@@ -1,4 +1,4 @@
-"""Local LLM Client for Aether-CyberAgent v4.0.0"""
+"""Local LLM Client for Aether-CyberAgent v4.0.1"""
 import json
 import urllib.request
 import urllib.error

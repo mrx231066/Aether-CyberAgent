@@ -1,4 +1,4 @@
-"""Base Aether Provider Interface for Multi-Provider Architecture (v4.0.0)."""
+"""Base Aether Provider Interface for Multi-Provider Architecture (v4.0.1)."""
 
 from abc import ABC, abstractmethod
 from typing import Dict, List, Any, Optional

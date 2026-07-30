@@ -32,7 +32,7 @@ BANNER = """[bold cyan]
    ╔═══════════════════════════════════════════════╗
    ║          🛡️  AETHER-CYBERAGENT  🛡️            ║
    ║   Autonomous Multi-Agent AI Security Platform  ║
-   ║            v4.0.0 · Defense Only               ║
+   ║            v4.0.1 · Defense Only               ║
    ╚═══════════════════════════════════════════════╝
 [/bold cyan]"""
 

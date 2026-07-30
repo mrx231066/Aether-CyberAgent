@@ -1,4 +1,4 @@
-"""Capability Detection Engine for Aether-CyberAgent v4.0.0"""
+"""Capability Detection Engine for Aether-CyberAgent v4.0.1"""
 
 import os
 import platform

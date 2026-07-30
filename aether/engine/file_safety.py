@@ -1,4 +1,4 @@
-"""File Safety Inspector for Aether-CyberAgent v4.0.0.
+"""File Safety Inspector for Aether-CyberAgent v4.0.1.
 
 Enforces the MANDATORY rule: READ → ANALYZE → AUTHORIZE → ACT.
 Prevents Indirect Prompt Injection and execution of unverified/untrusted data.

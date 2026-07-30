@@ -1,4 +1,4 @@
-"""Unified AI Provider Interface for Aether-CyberAgent v4.0.0"""
+"""Unified AI Provider Interface for Aether-CyberAgent v4.0.1"""
 from typing import Protocol, Dict, Any, Optional
 
 class AIProvider(Protocol):

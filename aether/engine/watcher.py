@@ -1,4 +1,4 @@
-"""Watch Mode for Aether-CyberAgent v4.0.0.
+"""Watch Mode for Aether-CyberAgent v4.0.1.
 
 Continuous file monitoring with automatic security scanning
 on file changes using watchdog.

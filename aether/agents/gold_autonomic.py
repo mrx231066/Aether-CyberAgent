@@ -312,7 +312,7 @@ class AutonomicEngine:
         banner = Panel(
             "[bold cyan]🛡️  AETHER-CYBERAGENT[/]\n"
             "[dim]Autonomous Multi-Agent AI Security Platform[/]\n"
-            f"[dim]v4.0.0 | {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}[/]",
+            f"[dim]v4.0.1 | {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}[/]",
             box=box.DOUBLE,
             border_style="cyan",
             padding=(1, 4),

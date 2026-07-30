@@ -1,4 +1,4 @@
-"""Plugin System for Aether-CyberAgent v4.0.0.
+"""Plugin System for Aether-CyberAgent v4.0.1.
 
 Hot-loadable plugin architecture supporting:
 - Python plugins from ~/.aether/plugins/
