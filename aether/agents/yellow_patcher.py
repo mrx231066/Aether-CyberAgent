@@ -122,7 +122,29 @@ TOOL_DECLARATIONS = [
         ),
         types.FunctionDeclaration(
             name="gmail_connector",
-            description="Stub function for future email integrations.",
+            description="Send an email via Gmail SMTP.",
+            parameters=types.Schema(
+                type="OBJECT",
+                properties={
+                    "action": types.Schema(
+                        type="STRING",
+                        description="Action to perform (e.g., 'send')",
+                    ),
+                    "to": types.Schema(
+                        type="STRING",
+                        description="Recipient email address",
+                    ),
+                    "subject": types.Schema(
+                        type="STRING",
+                        description="Email subject",
+                    ),
+                    "body": types.Schema(
+                        type="STRING",
+                        description="Email body",
+                    ),
+                },
+                required=["action", "to", "subject", "body"],
+            ),
         ),
     ]),
 ]

@@ -22,16 +22,26 @@ class HybridRouter:
                 # Fallthrough to cloud
                 
         # If heavy task or local unavailable, use primary cloud provider
-        # Note: In a full multi-provider setup, this calls the unified API interface.
         console.print("[dim]☁️  Routing to primary Cloud Provider...[/dim]")
-        # Placeholder for unified provider call
-        from aether.ai.gemini_client import GeminiClient
-        import os
-        api_key = os.environ.get("GEMINI_API_KEY")
-        if not api_key:
+        
+        from aether.ai.provider_manager import ProviderManager
+        provider = ProviderManager.get_active_provider()
+        
+        if not provider:
+            console.print("[bold red]❌ No active cloud provider configured. Use /provider add[/bold red]")
             return ""
+            
+        model_id = ProviderManager._active_model_id
+        if not model_id:
+            # Fallback to the first available model if one isn't explicitly set
+            models = provider.list_models()
+            if models:
+                model_id = models[0].model_id
+                ProviderManager._active_model_id = model_id
+            else:
+                return "[Error: Provider has no available models]"
+                
         try:
-            client = GeminiClient(api_key=api_key)
-            return client.chat(prompt)
-        except Exception:
-            return ""
+            return provider.generate(request=f"System: {system}\n\nUser: {prompt}", model_id=model_id)
+        except Exception as e:
+            return f"[Provider Error: {str(e)}]"

@@ -202,7 +202,7 @@ def handle_slash_command(command: str, api_key: str, model: str) -> Optional[str
         from aether.ai.provider_manager import ProviderManager
         from aether.ai.providers.google_gemini import GoogleGeminiAdapter
         
-        # Auto-register stub for demo
+        # Auto-register default provider
         if "google_gemini" not in ProviderManager._providers:
             ProviderManager.register(GoogleGeminiAdapter())
         
@@ -229,7 +229,7 @@ def handle_slash_command(command: str, api_key: str, model: str) -> Optional[str
                     ProviderManager.switch_provider("google_gemini")
                     ProviderManager.refresh_models("google_gemini")
             else:
-                console.print(f"[dim]Provider {choice} adapter stub initialized...[/dim]")
+                console.print(f"[dim]Provider {choice} adapter initialized...[/dim]")
         elif args == "list":
             console.print("\n[bold cyan]🔌 Configured Providers:[/bold cyan]")
             for p_name, p_obj in ProviderManager._providers.items():

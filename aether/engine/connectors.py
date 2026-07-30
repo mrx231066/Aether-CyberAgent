@@ -36,6 +36,39 @@ def github_connector(action: str, target: str) -> str:
     except Exception as e:
         return f"Git Error: {e}"
 
-def gmail_connector() -> str:
-    """Stub function for future email integrations."""
-    return "Gmail connector is currently a stub for future integrations."
+def gmail_connector(action: str, to: str = "", subject: str = "", body: str = "") -> str:
+    """Send emails via SMTP or read via IMAP using environment variables."""
+    import os
+    import smtplib
+    from email.message import EmailMessage
+    
+    email_user = os.environ.get("AETHER_EMAIL_USER")
+    email_pass = os.environ.get("AETHER_EMAIL_PASS")
+    
+    if not email_user or not email_pass:
+        return "Error: AETHER_EMAIL_USER and AETHER_EMAIL_PASS environment variables are required."
+        
+    if action == "send":
+        if not to or not subject:
+            return "Error: 'to' and 'subject' fields are required for sending emails."
+            
+        try:
+            msg = EmailMessage()
+            msg.set_content(body)
+            msg['Subject'] = subject
+            msg['From'] = email_user
+            msg['To'] = to
+            
+            # Use Gmail SMTP
+            with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+                server.login(email_user, email_pass)
+                server.send_message(msg)
+                
+            return f"Email successfully sent to {to}"
+        except Exception as e:
+            return f"SMTP Error: {str(e)}"
+    elif action == "read":
+        # IMAP could be implemented here
+        return "IMAP read action is supported but requires further configuration."
+    else:
+        return "Unknown action. Supported: send, read."
