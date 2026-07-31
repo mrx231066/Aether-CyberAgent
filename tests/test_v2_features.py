@@ -223,7 +223,7 @@ class TestHtmlReporter:
 
         html = reporter.generate_report(result)
         assert "AETHER-CYBERAGENT" in html
-        assert "v2.0.0" in html
+        assert "v4.0.1" in html
         assert "eval() usage" in html
 
     def test_save_html_report(self, tmp_path):
