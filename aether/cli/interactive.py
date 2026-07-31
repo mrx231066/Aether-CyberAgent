@@ -752,13 +752,26 @@ def start_interactive_session():
 
     console.print(REPL_BANNER)
 
-    # Step 1: Check ProviderManager for authentication
+    # Step 1: Auto-load stored credentials, provider state, and session memory
+    ProviderManager.auto_load()
+
+    try:
+        from aether.engine.db import AetherDB
+        from aether.config import SessionState
+        past_history = AetherDB.get_history(limit=50)
+        if past_history:
+            SessionState.history = past_history
+    except Exception:
+        pass
+
     active_provider = ProviderManager.get_active_provider()
     model = ProviderManager._active_model_id if active_provider else "None (Use /provider add)"
     api_key = ""  # Legacy variable required by handlers
 
     if not active_provider:
         console.print("[dim yellow]No AI Provider configured. You are in offline mode. Type /provider add to set one up.[/dim yellow]\n")
+    else:
+        console.print(f"[bold green]✓ Restored active provider: {active_provider.display_name} ({model})[/bold green]")
 
     console.print(
         Panel(

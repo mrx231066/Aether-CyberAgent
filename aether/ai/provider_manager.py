@@ -23,10 +23,56 @@ class ProviderManager:
     _fallback_chain: List[str] = []
 
     @classmethod
+    def auto_load(cls):
+        """Auto-load stored credentials and restore active provider & model from user device config."""
+        from aether.auth import load_config
+        from aether.ai.providers import PROVIDER_REGISTRY
+        from aether.engine.credentials import CredentialManager
+
+        config = load_config()
+        saved_provider = config.get("active_provider")
+        saved_model = config.get("active_model")
+
+        # Auto-instantiate any provider with saved credentials
+        for choice, (p_id, factory) in PROVIDER_REGISTRY.items():
+            if p_id in cls._providers:
+                continue
+            key = CredentialManager.get_credential(p_id)
+            if key or p_id in ("ollama", "vllm"):
+                try:
+                    provider = factory()
+                    provider._is_authenticated = True
+                    if hasattr(provider, "_init_client"):
+                        provider._init_client()
+                    cls._providers[p_id] = provider
+                except Exception:
+                    pass
+
+        if saved_provider and saved_provider in cls._providers:
+            cls._active_provider_name = saved_provider
+        elif cls._providers and not cls._active_provider_name:
+            cls._active_provider_name = next(iter(cls._providers))
+
+        active_provider = cls.get_active_provider()
+        if active_provider:
+            if saved_model:
+                cls._active_model_id = saved_model
+            try:
+                models = active_provider.list_models()
+                if models:
+                    cls._model_registry[active_provider.name] = models
+                    if not cls._active_model_id or not any(m.model_id == cls._active_model_id for m in models):
+                        cls._active_model_id = models[0].model_id
+            except Exception:
+                pass
+
+    @classmethod
     def register(cls, provider: AetherProvider):
+        from aether.auth import save_config
         cls._providers[provider.name] = provider
         if not cls._active_provider_name:
             cls._active_provider_name = provider.name
+            save_config({"active_provider": provider.name})
         EventBus.emit("provider_registered", {"provider": provider.name})
 
     @classmethod
@@ -37,9 +83,11 @@ class ProviderManager:
 
     @classmethod
     def switch_provider(cls, provider_name: str) -> bool:
+        from aether.auth import save_config
         if provider_name in cls._providers:
             cls._active_provider_name = provider_name
             cls._active_model_id = None
+            save_config({"active_provider": provider_name})
             EventBus.emit("provider_switched", {"provider": provider_name})
             return True
         raise ProviderError(f"Provider '{provider_name}' not registered.")
@@ -71,6 +119,7 @@ class ProviderManager:
 
     @classmethod
     def set_active_model(cls, model_id: str) -> bool:
+        from aether.auth import save_config
         provider = cls.get_active_provider()
         if not provider:
             raise ProviderError("No active provider set.")
@@ -78,6 +127,7 @@ class ProviderManager:
         models = cls._model_registry.get(provider.name, [])
         if any(m.model_id == model_id for m in models):
             cls._active_model_id = model_id
+            save_config({"active_model": model_id})
             EventBus.emit("model_switched", {"model_id": model_id})
             return True
         raise ProviderError(f"Model '{model_id}' not found in registry.")

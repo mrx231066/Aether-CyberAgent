@@ -94,6 +94,11 @@ class AetherDB:
             pass
 
     @classmethod
+    def save_history(cls, role: str, content: str, provider: str = "", model: str = "", session_id: str = "default"):
+        """Convenience wrapper to persist a conversation turn."""
+        cls.save_history_entry(session_id=session_id, role=role, content=content, provider=provider, model=model)
+
+    @classmethod
     def get_history(cls, session_id: str = "default", limit: int = 50) -> List[Dict[str, Any]]:
         """Retrieve recent session history."""
         try:
