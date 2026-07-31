@@ -239,7 +239,8 @@ def handle_slash_command(command: str, api_key: str, model: str) -> Optional[str
             # Show real status — don't auto-register anything
             ProviderManager.status()
         elif args == "add":
-            from aether.ai.providers.google_gemini import GoogleGeminiAdapter
+            from aether.ai.providers import PROVIDER_REGISTRY
+            from aether.ai.providers.openai_compatible import create_custom_adapter
             console.print("\n╭──────────────────────────────────────╮")
             console.print("│       [bold cyan]ADD AI PROVIDER[/bold cyan]                │")
             console.print("├──────────────────────────────────────┤")
@@ -249,24 +250,45 @@ def handle_slash_command(command: str, api_key: str, model: str) -> Optional[str
             console.print("│ 4. Moonshot AI / Kimi                │")
             console.print("│ 5. Z.ai / GLM                        │")
             console.print("│ 6. OpenRouter                        │")
-            console.print("│ 7. Import Custom Provider            │")
+            console.print("│ 7. Ollama (Local)                    │")
+            console.print("│ 8. vLLM (Local)                      │")
+            console.print("│ 9. Custom OpenAI-Compatible API      │")
             console.print("╰──────────────────────────────────────╯")
 
-            choice = Prompt.ask("Select provider", choices=[str(i) for i in range(1, 8)])
-            if choice == "3":
-                provider = GoogleGeminiAdapter()
+            choice = Prompt.ask("Select provider", choices=[str(i) for i in range(1, 10)])
+            
+            if choice == "9":
+                # Custom provider import
+                p_name = Prompt.ask("Provider Name")
+                p_id = p_name.lower().replace(" ", "_")
+                p_url = Prompt.ask("Base URL (e.g. https://api.example.com/v1)")
+                provider = create_custom_adapter(p_id, p_name, p_url)
                 if provider.authenticate():
                     ProviderManager.register(provider)
-                    ProviderManager.switch_provider("google_gemini")
-                    console.print("[bold green]✅ Google Gemini connected successfully![/bold green]")
+                    ProviderManager.switch_provider(p_id)
+                    console.print(f"[bold green]✅ {p_name} connected successfully![/bold green]")
                     try:
-                        ProviderManager.refresh_models("google_gemini")
+                        ProviderManager.refresh_models(p_id)
                     except Exception as e:
                         console.print(f"[dim yellow]Model discovery skipped: {e}[/dim yellow]")
                 else:
                     console.print("[red]❌ Authentication cancelled or failed.[/red]")
-            else:
-                console.print(f"[dim yellow]Provider {choice} is not yet implemented. Use Google Gemini (option 3) for now.[/dim yellow]")
+            elif choice in PROVIDER_REGISTRY:
+                p_id, factory = PROVIDER_REGISTRY[choice]
+                provider = factory()
+                if provider.authenticate():
+                    ProviderManager.register(provider)
+                    ProviderManager.switch_provider(p_id)
+                    console.print(f"[bold green]✅ {provider.display_name} connected successfully![/bold green]")
+                    try:
+                        ProviderManager.refresh_models(p_id)
+                        models = ProviderManager._model_registry.get(p_id, [])
+                        if models:
+                            console.print(f"[dim cyan]📦 {len(models)} model(s) discovered.[/dim cyan]")
+                    except Exception as e:
+                        console.print(f"[dim yellow]Model discovery skipped: {e}[/dim yellow]")
+                else:
+                    console.print("[red]❌ Authentication cancelled or failed.[/red]")
         elif args == "list":
             if ProviderManager._providers:
                 console.print("\n[bold cyan]🔌 Configured Providers:[/bold cyan]")

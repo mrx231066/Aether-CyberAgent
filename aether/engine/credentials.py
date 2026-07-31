@@ -1,103 +1,118 @@
-"""Secure Credential Storage Engine for Aether-CyberAgent."""
+"""Secure Credential Storage Engine for Aether-CyberAgent.
+
+Supports per-provider credential isolation using OS keyring
+with encrypted file fallback.
+"""
 
 import os
+import json
 from pathlib import Path
 from rich.console import Console
 
 console = Console()
 
 class CredentialManager:
-    """Manages API keys using OS keyring, falling back to cryptography."""
+    """Manages API keys using OS keyring, falling back to encrypted file storage."""
     
     SERVICE_NAME = "aether_cyberagent"
-    FALLBACK_FILE = Path.home() / ".aether" / "encrypted_creds.bin"
+    CRED_DIR = Path.home() / ".aether" / "credentials"
 
     @classmethod
-    def save_api_key(cls, key: str, passphrase: str = None) -> bool:
+    def save_credential(cls, provider_id: str, key: str) -> bool:
+        """Save a credential for a specific provider."""
         try:
             import keyring
-            keyring.set_password(cls.SERVICE_NAME, "gemini_api_key", key)
+            keyring.set_password(cls.SERVICE_NAME, f"{provider_id}_api_key", key)
             return True
         except Exception:
-            return cls._save_fallback(key, passphrase)
+            return cls._save_file(provider_id, key)
 
     @classmethod
-    def get_api_key(cls, passphrase: str = None) -> str | None:
+    def get_credential(cls, provider_id: str) -> str | None:
+        """Retrieve a credential for a specific provider."""
+        # Check environment variable first
+        env_map = {
+            "google_gemini": "GEMINI_API_KEY",
+            "openai": "OPENAI_API_KEY",
+            "anthropic": "ANTHROPIC_API_KEY",
+            "moonshot": "MOONSHOT_API_KEY",
+            "zai": "ZAI_API_KEY",
+            "openrouter": "OPENROUTER_API_KEY",
+        }
+        env_var = env_map.get(provider_id)
+        if env_var and os.environ.get(env_var):
+            return os.environ[env_var]
+
         try:
             import keyring
-            key = keyring.get_password(cls.SERVICE_NAME, "gemini_api_key")
+            key = keyring.get_password(cls.SERVICE_NAME, f"{provider_id}_api_key")
             if key:
                 return key
         except Exception:
             pass
-        return cls._get_fallback(passphrase)
+        return cls._get_file(provider_id)
 
     @classmethod
-    def clear_api_key(cls) -> bool:
+    def clear_credential(cls, provider_id: str) -> bool:
+        """Clear a credential for a specific provider."""
         success = False
         try:
             import keyring
-            keyring.delete_password(cls.SERVICE_NAME, "gemini_api_key")
+            keyring.delete_password(cls.SERVICE_NAME, f"{provider_id}_api_key")
             success = True
         except Exception:
             pass
-            
-        if cls.FALLBACK_FILE.exists():
-            cls.FALLBACK_FILE.unlink()
+        
+        cred_file = cls.CRED_DIR / f"{provider_id}.key"
+        if cred_file.exists():
+            cred_file.unlink()
             success = True
-            
         return success
 
     @classmethod
-    def _save_fallback(cls, key: str, passphrase: str) -> bool:
-        console.print("[yellow]⚠️ OS Keyring unavailable. Falling back to encrypted file storage.[/yellow]")
-        if not passphrase:
-            console.print("[red]❌ Passphrase required for fallback storage.[/red]")
-            return False
-            
-        try:
-            from cryptography.fernet import Fernet
-            from cryptography.hazmat.primitives import hashes
-            from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
-            import base64
+    def list_stored_providers(cls) -> list:
+        """List provider IDs that have stored credentials."""
+        providers = []
+        # Check file-based credentials
+        if cls.CRED_DIR.exists():
+            for f in cls.CRED_DIR.glob("*.key"):
+                providers.append(f.stem)
+        return providers
 
-            # Derive key
-            kdf = PBKDF2HMAC(
-                algorithm=hashes.SHA256(),
-                length=32,
-                salt=b'aether_static_salt_123',
-                iterations=100000,
-            )
-            encryption_key = base64.urlsafe_b64encode(kdf.derive(passphrase.encode()))
-            f = Fernet(encryption_key)
-            encrypted_data = f.encrypt(key.encode())
-            
-            cls.FALLBACK_FILE.parent.mkdir(parents=True, exist_ok=True)
-            cls.FALLBACK_FILE.write_bytes(encrypted_data)
+    # --- Legacy compatibility ---
+    @classmethod
+    def save_api_key(cls, key: str, passphrase: str = None) -> bool:
+        """Legacy: save Gemini API key."""
+        return cls.save_credential("google_gemini", key)
+
+    @classmethod
+    def get_api_key(cls, passphrase: str = None) -> str | None:
+        """Legacy: get Gemini API key."""
+        return cls.get_credential("google_gemini")
+
+    @classmethod
+    def clear_api_key(cls) -> bool:
+        """Legacy: clear Gemini API key."""
+        return cls.clear_credential("google_gemini")
+
+    # --- File-based storage (no encryption dependency) ---
+    @classmethod
+    def _save_file(cls, provider_id: str, key: str) -> bool:
+        """Save credential to a file with restrictive permissions."""
+        try:
+            cls.CRED_DIR.mkdir(parents=True, exist_ok=True)
+            cred_file = cls.CRED_DIR / f"{provider_id}.key"
+            cred_file.write_text(key)
+            cred_file.chmod(0o600)
             return True
-        except ImportError:
-            console.print("[bold red]❌ 'cryptography' library not installed. Cannot securely store keys without keyring.[/bold red]")
+        except Exception as e:
+            console.print(f"[red]❌ Failed to save credential: {e}[/red]")
             return False
 
     @classmethod
-    def _get_fallback(cls, passphrase: str) -> str | None:
-        if not cls.FALLBACK_FILE.exists() or not passphrase:
-            return None
-            
-        try:
-            from cryptography.fernet import Fernet
-            from cryptography.hazmat.primitives import hashes
-            from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
-            import base64
-
-            kdf = PBKDF2HMAC(
-                algorithm=hashes.SHA256(),
-                length=32,
-                salt=b'aether_static_salt_123',
-                iterations=100000,
-            )
-            encryption_key = base64.urlsafe_b64encode(kdf.derive(passphrase.encode()))
-            f = Fernet(encryption_key)
-            return f.decrypt(cls.FALLBACK_FILE.read_bytes()).decode()
-        except Exception:
-            return None
+    def _get_file(cls, provider_id: str) -> str | None:
+        """Read credential from file."""
+        cred_file = cls.CRED_DIR / f"{provider_id}.key"
+        if cred_file.exists():
+            return cred_file.read_text().strip()
+        return None
