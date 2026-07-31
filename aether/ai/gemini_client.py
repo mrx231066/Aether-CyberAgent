@@ -52,23 +52,7 @@ class GeminiClient:
                 "or pass api_key to GeminiClient()."
             )
         self.model = model or os.environ.get("GEMINI_MODEL") or self.DEFAULT_MODEL
-        
-        if self.api_key == "OAUTH_MODE":
-            try:
-                from google.oauth2.credentials import Credentials
-                from aether.auth import load_config
-                config = load_config()
-                if "oauth_creds" in config:
-                    creds = Credentials(**config["oauth_creds"])
-                    # Use credentials directly. Note: Vertex AI models usually require project ID.
-                    self.client = genai.Client(credentials=creds, http_options={'api_version': 'v1beta'})
-                else:
-                    raise ValueError("OAuth credentials not found in config.")
-            except Exception as e:
-                console.print(f"[bold red]❌ Failed to load OAuth credentials: {e}[/bold red]")
-                self.client = genai.Client(api_key="") # Will fail gracefully later
-        else:
-            self.client = genai.Client(api_key=self.api_key)
+        self.client = genai.Client(api_key=self.api_key)
 
     @classmethod
     def get_available_models(cls, api_key: Optional[str] = None) -> List[dict]:
@@ -79,14 +63,7 @@ class GeminiClient:
             return cls.DEFAULT_GEMINI_MODELS
 
         try:
-            if key == "OAUTH_MODE":
-                from google.oauth2.credentials import Credentials
-                from aether.auth import load_config
-                config = load_config()
-                creds = Credentials(**config.get("oauth_creds", {}))
-                client = genai.Client(credentials=creds, http_options={'api_version': 'v1beta'})
-            else:
-                client = genai.Client(api_key=key)
+            client = genai.Client(api_key=key)
             models = list(client.models.list())
             discovered = []
 

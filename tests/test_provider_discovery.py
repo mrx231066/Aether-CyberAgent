@@ -136,3 +136,40 @@ def test_unauthenticated_fetch_failure_raises_error(monkeypatch):
     with pytest.raises(RuntimeError) as exc_info:
         adapter.list_models(force_refresh=True)
     assert "not authenticated" in str(exc_info.value).lower()
+
+
+def test_gemini_invalid_key_diagnostic_error(monkeypatch):
+    clear_model_cache("google_gemini")
+    adapter = GoogleGeminiAdapter()
+    monkeypatch.setattr(CredentialManager, "get_credential", lambda *args: "invalid-key-123")
+    
+    mock_client = MagicMock()
+    mock_client.models.list.side_exception = Exception("API_KEY_INVALID: Key not found")
+    mock_client.models.list.side_effect = Exception("API_KEY_INVALID: Key not found")
+    adapter._client = mock_client
+    monkeypatch.setattr(adapter, "_init_client", lambda: True)
+    
+    with pytest.raises(RuntimeError) as exc_info:
+        adapter.list_models(force_refresh=True)
+    assert "credentials provided but invalid" in str(exc_info.value).lower()
+
+
+def test_gemini_valid_key_flows_to_models(monkeypatch):
+    clear_model_cache("google_gemini")
+    adapter = GoogleGeminiAdapter()
+    monkeypatch.setattr(CredentialManager, "get_credential", lambda *args: "valid-key-456")
+    
+    mock_client = MagicMock()
+    class MockModel:
+        name = "models/gemini-2.5-flash"
+        display_name = "Gemini 2.5 Flash"
+        supported_generation_methods = ["generateContent"]
+        
+    mock_client.models.list.return_value = [MockModel()]
+    adapter._client = mock_client
+    monkeypatch.setattr(adapter, "_init_client", lambda: True)
+    
+    models = adapter.list_models(force_refresh=True)
+    assert len(models) == 1
+    assert models[0].model_id == "gemini-2.5-flash"
+    assert models[0].display_name == "Gemini 2.5 Flash"

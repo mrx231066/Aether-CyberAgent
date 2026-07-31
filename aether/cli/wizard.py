@@ -17,13 +17,8 @@ class SetupWizard:
         console.print(Panel("[bold cyan]Welcome to Aether-CyberAgent Setup Wizard[/bold cyan]", border_style="cyan"))
         
         # 1. Authentication
-        auth_type = Prompt.ask("Select Authentication Type", choices=["API Key", "Google OAuth"], default="API Key")
-        if auth_type == "API Key":
-            api_key = Prompt.ask("Enter your Gemini API Key", password=True)
-            config_data = {"api_key": api_key, "auth_type": "api_key"}
-        else:
-            console.print("[dim]Google OAuth selected...[/dim]")
-            config_data = {"auth_type": "oauth"}
+        api_key = Prompt.ask("Enter your Gemini API Key", password=True)
+        config_data = {"api_key": api_key, "auth_type": "api_key"}
             
         # 2. Model Provider
         provider = Prompt.ask("Select Primary Model Provider", choices=["Gemini", "Ollama", "Anthropic", "DeepSeek"], default="Gemini")

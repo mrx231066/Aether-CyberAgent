@@ -1,6 +1,7 @@
 """Google Gemini Provider Adapter for Aether-CyberAgent.
 
 Uses standard Google AI Studio API Key authentication via official google-genai SDK.
+Live model discovery is enforced via client.models.list().
 """
 
 from typing import List, Optional, Any
@@ -34,11 +35,28 @@ class GoogleGeminiAdapter(AetherProvider):
             console.print("[red]❌ No API Key entered.[/red]")
             return False
 
+        # Immediate validation on entry before saving
+        try:
+            from google import genai
+            test_client = genai.Client(api_key=api_key)
+            models = list(test_client.models.list())
+            if not models:
+                console.print("[red]❌ Google Gemini API returned no models.[/red]")
+                return False
+            self._client = test_client
+        except Exception as e:
+            console.print(f"[bold red]❌ Invalid, expired, or API call failed for Gemini API Key: {e}[/bold red]")
+            return False
+
         CredentialManager.save_credential("google_gemini", api_key)
         self._is_authenticated = True
-        return self._init_client()
+        console.print("[bold green]✅ Google Gemini connected & key verified successfully![/bold green]")
+        return True
 
     def _init_client(self) -> bool:
+        if self._client:
+            return True
+            
         api_key = CredentialManager.get_credential("google_gemini")
         if not api_key:
             self._client = None
@@ -71,12 +89,16 @@ class GoogleGeminiAdapter(AetherProvider):
                 raise RuntimeError("Failed to initialize Google GenAI client instance.")
 
         try:
+            # Direct live discovery from client.models.list() — NO hardcoded fallback arrays
             models = self._client.models.list()
             result = []
             for m in models:
                 name = getattr(m, "name", "") or ""
                 disp = getattr(m, "display_name", "") or name
-                if "gemini" in name.lower():
+                methods = getattr(m, "supported_generation_methods", []) or []
+                
+                # Filter for Gemini models supporting generateContent if methods specified
+                if "gemini" in name.lower() and (not methods or "generateContent" in methods or "generate_content" in methods):
                     clean_id = name.replace("models/", "") if name.startswith("models/") else name
                     result.append(ModelMetadata(
                         provider=self.name,
@@ -84,11 +106,11 @@ class GoogleGeminiAdapter(AetherProvider):
                         model_id=clean_id,
                         display_name=disp or clean_id,
                         capabilities={"streaming": True, "vision": True, "tools": True},
-                        context_length=1048576
+                        context_length=getattr(m, "input_token_limit", 1048576) or 1048576
                     ))
 
             if not result:
-                raise ValueError("No Gemini models returned by Google GenAI API.")
+                raise ValueError("No Gemini models supporting generateContent returned by Google GenAI API.")
 
             sorted_result = sorted(result, key=lambda x: x.model_id)
             set_cached_models(self.name, sorted_result)
@@ -113,11 +135,8 @@ class GoogleGeminiAdapter(AetherProvider):
         
         target_model = model_id
         if not target_model:
-            try:
-                models = self.list_models()
-                target_model = models[0].model_id if models else "gemini-2.5-pro"
-            except Exception:
-                target_model = "gemini-2.5-pro"
+            models = self.list_models()
+            target_model = models[0].model_id
 
         try:
             response = self._client.models.generate_content(
@@ -135,11 +154,8 @@ class GoogleGeminiAdapter(AetherProvider):
             
         target_model = model_id
         if not target_model:
-            try:
-                models = self.list_models()
-                target_model = models[0].model_id if models else "gemini-2.5-pro"
-            except Exception:
-                target_model = "gemini-2.5-pro"
+            models = self.list_models()
+            target_model = models[0].model_id
 
         try:
             response = self._client.models.generate_content_stream(
@@ -156,6 +172,5 @@ class GoogleGeminiAdapter(AetherProvider):
 
     def disconnect(self) -> None:
         CredentialManager.clear_credential("google_gemini")
-        CredentialManager.clear_credential("google_gemini_oauth")
         self._is_authenticated = False
         self._client = None

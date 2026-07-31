@@ -95,14 +95,40 @@ class CredentialManager:
         """Legacy: clear Gemini API key."""
         return cls.clear_credential("google_gemini")
 
-    # --- File-based storage (no encryption dependency) ---
+    # --- File-based storage (encrypted with machine-bound key) ---
+    @classmethod
+    def _get_machine_key(cls) -> bytes:
+        import socket, getpass, hashlib
+        seed = f"{socket.gethostname()}:{getpass.getuser()}:aether_cred_salt"
+        return hashlib.sha256(seed.encode()).digest()
+
+    @classmethod
+    def _encrypt(cls, text: str) -> str:
+        import base64
+        key_bytes = cls._get_machine_key()
+        data = text.encode('utf-8')
+        cipher = bytes(b ^ key_bytes[i % len(key_bytes)] for i, b in enumerate(data))
+        return base64.b64encode(cipher).decode('utf-8')
+
+    @classmethod
+    def _decrypt(cls, ciphertext: str) -> str:
+        try:
+            import base64
+            key_bytes = cls._get_machine_key()
+            cipher = base64.b64decode(ciphertext.encode('utf-8'))
+            data = bytes(b ^ key_bytes[i % len(key_bytes)] for i, b in enumerate(cipher))
+            return data.decode('utf-8')
+        except Exception:
+            return ciphertext
+
     @classmethod
     def _save_file(cls, provider_id: str, key: str) -> bool:
-        """Save credential to a file with restrictive permissions."""
+        """Save encrypted credential to a file with restrictive permissions (0o600)."""
         try:
             cls.CRED_DIR.mkdir(parents=True, exist_ok=True)
             cred_file = cls.CRED_DIR / f"{provider_id}.key"
-            cred_file.write_text(key)
+            encrypted = cls._encrypt(key)
+            cred_file.write_text(encrypted)
             cred_file.chmod(0o600)
             return True
         except Exception as e:
@@ -111,8 +137,9 @@ class CredentialManager:
 
     @classmethod
     def _get_file(cls, provider_id: str) -> str | None:
-        """Read credential from file."""
+        """Read and decrypt credential from file."""
         cred_file = cls.CRED_DIR / f"{provider_id}.key"
         if cred_file.exists():
-            return cred_file.read_text().strip()
+            content = cred_file.read_text().strip()
+            return cls._decrypt(content)
         return None
