@@ -839,11 +839,21 @@ def start_interactive_session():
         rprompt=header.get_rprompt_text,
     )
 
+    from prompt_toolkit.formatted_text import HTML
+    prompt_style = HTML(
+        '<style fg="#7aa2f7" bold="true">╭─[</style>'
+        '<style fg="#e0af68" bold="true">aether-cyberagent</style>'
+        '<style fg="#7aa2f7" bold="true">]─[</style>'
+        '<style fg="#9ece6a">v4.0.1</style>'
+        '<style fg="#7aa2f7" bold="true">]</style>\n'
+        '<style fg="#7aa2f7" bold="true">╰─❯ </style>'
+    )
+
     patcher = None
     try:
         while True:
             try:
-                user_input = session.prompt("aether > ")
+                user_input = session.prompt(prompt_style)
             except EOFError:
                 console.print("\n[bold cyan]👋 Session ended.[/bold cyan]")
                 break
