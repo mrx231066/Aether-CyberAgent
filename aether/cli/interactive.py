@@ -652,17 +652,25 @@ def _run_script(script_path: str):
 
 
 def _chat_with_agent(user_input: str, api_key: str, model: str, patcher=None):
-    """Route conversational queries to the Yellow Patcher agent."""
-    from aether.agents.yellow_patcher import YellowPatcher
+    """Route conversational queries using ProviderManager active provider or YellowPatcher."""
+    from aether.ai.provider_manager import ProviderManager
+    provider = ProviderManager.get_active_provider()
 
     try:
-        if patcher is None:
-            patcher = YellowPatcher(api_key=api_key, model=model)
-        patcher.chat(user_input)
+        if provider:
+            active_model = ProviderManager._active_model_id or "default"
+            response = provider.generate(user_input, active_model)
+            console.print(f"\n[bold cyan]Aether:[/bold cyan] {response}\n")
+            return None
+        else:
+            from aether.agents.yellow_patcher import YellowPatcher
+            if patcher is None:
+                patcher = YellowPatcher(api_key=api_key, model=model)
+            patcher.chat(user_input)
+            return patcher
     except Exception as e:
         console.print(f"[bold red]❌ Agent error: {e}[/bold red]")
-
-    return patcher
+        return None
 
 
 # ── Status Bar ──
