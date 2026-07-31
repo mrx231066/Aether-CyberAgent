@@ -121,7 +121,7 @@ class ActionExecutor:
                 console.print(f"[bold red]🔴 Failed: {e}[/bold red]")
 
         elif act_type == "search":
-            res = self.tools.execute_shell(f"grep -rn '{content}' .")
+            res = self.tools.execute_shell(f"grep -rn --exclude-dir=.git --exclude-dir=.venv --exclude-dir=venv --exclude-dir=__pycache__ --exclude-dir=node_modules '{content}' .")
             result_data["stdout"] = res.get("stdout", "")
             result_data["stderr"] = res.get("stderr", "")
             result_data["exit_code"] = res.get("exit_code", 0)
