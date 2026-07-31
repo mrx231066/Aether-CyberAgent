@@ -80,19 +80,18 @@ class ToolEngine:
         return True
 
     def execute_shell(self, command: str, timeout: int = 30) -> Dict[str, Any]:
-        """Execute a shell command safely with timeout.
+        """Execute a shell command safely with timeout and dot status indicators."""
+        console.print(f"[bold yellow]●[/bold yellow] [dim]bash: {command}[/dim]")
 
-        Args:
-            command: Shell command to execute.
-            timeout: Maximum execution time in seconds.
-
-        Returns:
-            Dict with keys: stdout, stderr, exit_code, timed_out.
-        """
         from aether.config import Config
         if Config.GOD_MODE:
             from aether.engine.sandbox import Sandbox
-            return Sandbox.execute_in_sandbox(command, timeout)
+            res = Sandbox.execute_in_sandbox(command, timeout)
+            if res.get("exit_code") == 0:
+                console.print(f"[bold green]●[/bold green] [dim green]bash success (code 0)[/dim green]")
+            else:
+                console.print(f"[bold red]●[/bold red] [dim red]bash failed (code {res.get('exit_code')})[/dim red]")
+            return res
 
         try:
             result = subprocess.run(
@@ -103,6 +102,10 @@ class ToolEngine:
                 timeout=timeout,
                 cwd=str(self.working_dir),
             )
+            if result.returncode == 0:
+                console.print(f"[bold green]●[/bold green] [dim green]bash success (code 0)[/dim green]")
+            else:
+                console.print(f"[bold red]●[/bold red] [dim red]bash failed (code {result.returncode})[/dim red]")
             return {
                 "stdout": result.stdout,
                 "stderr": result.stderr,
@@ -110,6 +113,7 @@ class ToolEngine:
                 "timed_out": False,
             }
         except subprocess.TimeoutExpired:
+            console.print(f"[bold red]●[/bold red] [dim red]bash timed out after {timeout}s[/dim red]")
             return {
                 "stdout": "",
                 "stderr": f"Command timed out after {timeout} seconds",
@@ -117,6 +121,7 @@ class ToolEngine:
                 "timed_out": True,
             }
         except Exception as e:
+            console.print(f"[bold red]●[/bold red] [dim red]bash error: {e}[/dim red]")
             return {
                 "stdout": "",
                 "stderr": str(e),

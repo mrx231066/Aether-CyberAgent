@@ -24,7 +24,7 @@ def translate_nl_to_shell(nl_query: str) -> str:
         return None
         
     try:
-        console.print("[dim]● Analyzing OS intent...[/dim]")
+        console.print("[bold yellow]●[/bold yellow] [dim]Analyzing OS intent...[/dim]")
         client = genai.Client(api_key=api_key)
         response = client.models.generate_content(
             model=config.get("model", "gemini-2.5-flash"),
@@ -37,13 +37,18 @@ def translate_nl_to_shell(nl_query: str) -> str:
         console.print(Panel(f"[bold cyan]{cmd}[/bold cyan]", title="Proposed Command", border_style="cyan"))
         
         if Config.GOD_MODE or Confirm.ask("[bold green]Execute this command?[/bold green]", default=True):
+            console.print(f"[bold yellow]●[/bold yellow] [dim]bash: {cmd}[/dim]")
             res = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+            if res.returncode == 0:
+                console.print(f"[bold green]●[/bold green] [dim green]bash success (code 0)[/dim green]")
+            else:
+                console.print(f"[bold red]●[/bold red] [dim red]bash failed (code {res.returncode})[/dim red]")
             if res.stdout:
                 console.print(Panel(res.stdout.strip(), title="stdout", border_style="green"))
             if res.stderr:
                 console.print(Panel(res.stderr.strip(), title="stderr", border_style="red"))
             return ""  # Handled
     except Exception as e:
-        console.print(f"[dim red]Translation error: {e}[/dim red]")
+        console.print(f"[bold red]●[/bold red] [dim red]Translation error: {e}[/dim red]")
         
     return None

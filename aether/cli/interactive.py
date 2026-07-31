@@ -24,7 +24,7 @@ from aether.auth import load_config, save_config
 from aether.ai.provider_manager import ProviderManager
 
 REPL_BANNER = """[bold cyan]
-    █████╗ ███████╗████████╗██╗  ██╗███████╗██████╗        [bold white]v4.0.1[/bold white]
+    █████╗ ███████╗████████╗██╗  ██╗███████╗██████╗        [bold white]v4.2.0[/bold white]
    ██╔══██╗██╔════╝╚══██╔══╝██║  ██║██╔════╝██╔══██╗
    ███████║█████╗     ██║   ███████║█████╗  ██████╔╝
    ██╔══██║██╔══╝     ██║   ██╔══██║██╔══╝  ██╔══██╗
@@ -616,17 +616,17 @@ def _show_status(model: str):
 
 
 def _run_script(script_path: str):
-    """Execute a script in the sandbox via the ToolEngine."""
+    """Execute a script in the sandbox via the ToolEngine with dot status indicators."""
     from aether.engine.tools import ToolEngine
 
     tools = ToolEngine()
     target = Path(script_path).resolve()
 
     if not target.exists():
-        console.print(f"[bold red]❌ Script not found: {script_path}[/bold red]")
+        console.print(f"[bold red]●[/bold red] [bold red]Script not found: {script_path}[/bold red]")
         return
 
-    console.print(f"[bold green]🟢 Executing: {target.name}...[/bold green]")
+    console.print(f"[bold yellow]●[/bold yellow] [bold yellow]Executing script: {target.name}...[/bold yellow]")
     with console.status("[bold green]Agent working...[/bold green]", spinner="circle"):
         result = tools.execute_shell(f"python {target}", timeout=60)
 
@@ -641,11 +641,11 @@ def _run_script(script_path: str):
 
     exit_code = result["exit_code"]
     if exit_code == 0:
-        console.print("[green]✅ Script executed successfully.[/green]")
+        console.print("[bold green]●[/bold green] [bold green]Script executed successfully.[/bold green]")
     elif result["timed_out"]:
-        console.print("[yellow]⏱️  Script timed out.[/yellow]")
+        console.print("[bold red]●[/bold red] [bold yellow]Script timed out.[/bold yellow]")
     else:
-        console.print(f"[red]❌ Script failed with exit code {exit_code}.[/red]")
+        console.print(f"[bold red]●[/bold red] [bold red]Script failed with exit code {exit_code}.[/bold red]")
 
 
 # ── Agent Chat Handler ──
@@ -844,7 +844,7 @@ def start_interactive_session():
         '<style fg="#7aa2f7" bold="true">╭─[</style>'
         '<style fg="#e0af68" bold="true">aether-cyberagent</style>'
         '<style fg="#7aa2f7" bold="true">]─[</style>'
-        '<style fg="#9ece6a">v4.0.1</style>'
+        '<style fg="#9ece6a">v4.2.0</style>'
         '<style fg="#7aa2f7" bold="true">]</style>\n'
         '<style fg="#7aa2f7" bold="true">╰─❯ </style>'
     )

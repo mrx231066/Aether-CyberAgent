@@ -17,7 +17,7 @@ class SelfUpdateEngine:
 
     # Pinned official repository to prevent malicious fork redirection
     OFFICIAL_REPO_API = "https://api.github.com/repos/mrx231066/Aether-CyberAgent/releases/latest"
-    CURRENT_VERSION = "4.0.1"
+    CURRENT_VERSION = "4.2.0"
 
     @classmethod
     def check_for_update(cls, auto_check: bool = True) -> dict | None:
