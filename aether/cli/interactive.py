@@ -86,9 +86,40 @@ def handle_slash_command(command: str, api_key: str, model: str) -> Optional[str
         _run_scan(args or ".", api_key, model)
 
     elif cmd == "/model":
-        new_model = _select_model(api_key)
-        save_config({"model": new_model})
-        return new_model
+        # Check if ProviderManager has an active provider first
+        provider = ProviderManager.get_active_provider()
+        if provider:
+            # Use new provider-based model selection
+            models = ProviderManager._model_registry.get(provider.name, [])
+            if not models:
+                console.print("[bold red]❌ No models discovered. Run /provider refresh first.[/bold red]")
+                return None
+
+            console.print(f"\n╭─────────────────────────────────────────────╮")
+            console.print(f"│        [bold cyan]AVAILABLE {provider.display_name.upper()} MODELS[/bold cyan]              │")
+            console.print(f"├─────────────────────────────────────────────┤")
+
+            for i, m in enumerate(models, 1):
+                active_marker = "*" if m.model_id == ProviderManager._active_model_id else " "
+                console.print(f"│ {i}. {active_marker} {m.display_name:<33} │")
+
+            console.print("│                                             │")
+            console.print("│ R. Refresh Models                           │")
+            console.print("│ C. Continue                                 │")
+            console.print("╰─────────────────────────────────────────────╯")
+
+            choice = Prompt.ask("Select model", choices=[str(i) for i in range(1, len(models)+1)] + ["R", "r", "C", "c"])
+            if choice.upper() == "R":
+                ProviderManager.refresh_models(provider.name)
+            elif choice.upper() != "C":
+                idx = int(choice) - 1
+                ProviderManager.set_active_model(models[idx].model_id)
+                console.print(f"[bold green]✓ Active model set to: {models[idx].display_name}[/bold green]")
+        else:
+            # Fallback to legacy Gemini model selection
+            new_model = _select_model(api_key)
+            save_config({"model": new_model})
+            return new_model
 
     elif cmd == "/auth":
         new_key = Prompt.ask(
@@ -115,21 +146,21 @@ def handle_slash_command(command: str, api_key: str, model: str) -> Optional[str
         from aether.cli.session_manager import SessionManager
         n = int(args) if args.isdigit() else 1
         SessionManager.rollback(n)
-        
+
     elif cmd == "/branch":
         from aether.cli.session_manager import SessionManager
         if args:
             SessionManager.branch(args)
         else:
             console.print("[yellow]Usage: /branch <branch_name>[/yellow]")
-            
+
     elif cmd == "/switch":
         from aether.cli.session_manager import SessionManager
         if args:
             SessionManager.switch_branch(args)
         else:
             console.print("[yellow]Usage: /switch <branch_name>[/yellow]")
-            
+
     elif cmd == "/mcp":
         from aether.engine.mcp_client import MCPClient
         if args == "list":
@@ -139,7 +170,7 @@ def handle_slash_command(command: str, api_key: str, model: str) -> Optional[str
             MCPClient.connect(url)
         else:
             console.print("[yellow]Usage: /mcp list | /mcp connect <url>[/yellow]")
-            
+
     elif cmd == "/skills":
         from aether.engine.skills import SkillsLoader
         skills = SkillsLoader.discover_skills()
@@ -161,7 +192,11 @@ def handle_slash_command(command: str, api_key: str, model: str) -> Optional[str
                 CONFIG_PATH.unlink()
             if "GEMINI_API_KEY" in os.environ:
                 del os.environ["GEMINI_API_KEY"]
-            SessionState.chat_history.clear()
+            # Clear provider state
+            ProviderManager._providers.clear()
+            ProviderManager._active_provider_name = None
+            ProviderManager._active_model_id = None
+            ProviderManager._model_registry.clear()
             console.print("[green]✅ Successfully logged out.[/green]")
             return "EXIT"
 
@@ -200,16 +235,11 @@ def handle_slash_command(command: str, api_key: str, model: str) -> Optional[str
             console.print("[yellow]Usage: /update check | /update apply[/yellow]")
 
     elif cmd == "/provider":
-        from aether.ai.provider_manager import ProviderManager
-        from aether.ai.providers.google_gemini import GoogleGeminiAdapter
-        
-        # Auto-register default provider
-        if "google_gemini" not in ProviderManager._providers:
-            ProviderManager.register(GoogleGeminiAdapter())
-        
         if not args:
+            # Show real status — don't auto-register anything
             ProviderManager.status()
         elif args == "add":
+            from aether.ai.providers.google_gemini import GoogleGeminiAdapter
             console.print("\n╭──────────────────────────────────────╮")
             console.print("│       [bold cyan]ADD AI PROVIDER[/bold cyan]                │")
             console.print("├──────────────────────────────────────┤")
@@ -221,21 +251,30 @@ def handle_slash_command(command: str, api_key: str, model: str) -> Optional[str
             console.print("│ 6. OpenRouter                        │")
             console.print("│ 7. Import Custom Provider            │")
             console.print("╰──────────────────────────────────────╯")
-            
+
             choice = Prompt.ask("Select provider", choices=[str(i) for i in range(1, 8)])
             if choice == "3":
                 provider = GoogleGeminiAdapter()
-                ProviderManager.register(provider)
                 if provider.authenticate():
+                    ProviderManager.register(provider)
                     ProviderManager.switch_provider("google_gemini")
-                    ProviderManager.refresh_models("google_gemini")
+                    console.print("[bold green]✅ Google Gemini connected successfully![/bold green]")
+                    try:
+                        ProviderManager.refresh_models("google_gemini")
+                    except Exception as e:
+                        console.print(f"[dim yellow]Model discovery skipped: {e}[/dim yellow]")
+                else:
+                    console.print("[red]❌ Authentication cancelled or failed.[/red]")
             else:
-                console.print(f"[dim]Provider {choice} adapter initialized...[/dim]")
+                console.print(f"[dim yellow]Provider {choice} is not yet implemented. Use Google Gemini (option 3) for now.[/dim yellow]")
         elif args == "list":
-            console.print("\n[bold cyan]🔌 Configured Providers:[/bold cyan]")
-            for p_name, p_obj in ProviderManager._providers.items():
-                active = "*" if p_name == ProviderManager._active_provider_name else " "
-                console.print(f" {active} {p_obj.display_name} ({p_name})")
+            if ProviderManager._providers:
+                console.print("\n[bold cyan]🔌 Configured Providers:[/bold cyan]")
+                for p_name, p_obj in ProviderManager._providers.items():
+                    active = "*" if p_name == ProviderManager._active_provider_name else " "
+                    console.print(f" {active} {p_obj.display_name} ({p_name})")
+            else:
+                console.print("[dim yellow]No providers configured. Use /provider add to set one up.[/dim yellow]")
         elif args.startswith("remove "):
             p_name = args.split(" ", 1)[1]
             if p_name in ProviderManager._providers:
@@ -283,44 +322,6 @@ def handle_slash_command(command: str, api_key: str, model: str) -> Optional[str
         else:
             console.print("[yellow]Invalid /provider command. Try add, list, remove, use, test, models, refresh.[/yellow]")
 
-    elif cmd == "/model":
-        from aether.ai.provider_manager import ProviderManager
-        provider = ProviderManager.get_active_provider()
-        
-        if not provider:
-            console.print("[bold red]❌ No active provider. Use /provider add first.[/bold red]")
-            return
-            
-        if args == "refresh":
-            ProviderManager.refresh_models(provider.name)
-            return
-
-        models = ProviderManager._model_registry.get(provider.name, [])
-        if not models:
-            console.print("[bold red]❌ No models discovered. Run /model refresh.[/bold red]")
-            return
-            
-        console.print("\n╭─────────────────────────────────────────────╮")
-        console.print(f"│        [bold cyan]AVAILABLE {provider.display_name.upper()} MODELS[/bold cyan]              │")
-        console.print("├─────────────────────────────────────────────┤")
-        
-        for i, m in enumerate(models, 1):
-            active_marker = "*" if m.model_id == ProviderManager._active_model_id else " "
-            console.print(f"│ {i}. {active_marker} {m.display_name:<33} │")
-            
-        console.print("│                                             │")
-        console.print("│ R. Refresh Models                           │")
-        console.print("│ C. Continue                                 │")
-        console.print("╰─────────────────────────────────────────────╯")
-        
-        choice = Prompt.ask("Select model", choices=[str(i) for i in range(1, len(models)+1)] + ["R", "r", "C", "c"])
-        if choice.upper() == "R":
-            ProviderManager.refresh_models(provider.name)
-        elif choice.upper() != "C":
-            idx = int(choice) - 1
-            ProviderManager.set_active_model(models[idx].model_id)
-            console.print(f"[bold green]✓ Active model set to: {models[idx].display_name}[/bold green]")
-
     elif cmd == "/tasks":
         from aether.engine.tasks import TaskEngine
         TaskEngine.list_tasks()
@@ -349,7 +350,9 @@ def _show_help():
 
     table.add_row("/help", "Show this command reference", "—")
     table.add_row("/scan [path]", "Run full multi-agent security scan", "🔵🟡🟣🥇")
-    table.add_row("/model", "Switch Gemini model interactively", "🟡 Yellow")
+    table.add_row("/model", "Switch AI model interactively", "🟡 Yellow")
+    table.add_row("/provider add", "Add and configure an AI provider", "🔌")
+    table.add_row("/provider list", "List configured providers", "🔌")
     table.add_row("/auth", "Update API key & credentials", "—")
     table.add_row("/status", "Show session state & graph metrics", "⚪ White")
     table.add_row("/quota", "Show token usage & estimated cost", "⚪ White")
@@ -369,7 +372,7 @@ def _show_help():
 def _show_quota():
     """Display the Token Quota Engine panel."""
     from aether.config import SessionState
-    
+
     tokens = SessionState.total_tokens
     cost_per_million = 0.075  # blended average for flash
     estimated_cost = (tokens / 1_000_000) * cost_per_million
@@ -377,10 +380,10 @@ def _show_quota():
     table = Table(title="💰 Quota Engine", box=box.ROUNDED, border_style="green")
     table.add_column("Metric", style="bold white")
     table.add_column("Value", style="bold yellow", justify="right")
-    
+
     table.add_row("Session Total Tokens", f"{tokens:,}")
     table.add_row("Estimated Cost ($)", f"${estimated_cost:.5f}")
-    
+
     console.print(table)
 
 
@@ -397,7 +400,7 @@ def _run_scan(path: str, api_key: str, model: str):
     try:
         console.print(f"[bold cyan]🔵 Starting multi-agent scan on: {target}[/bold cyan]")
         engine = AutonomicEngine(max_retries=3, api_key=api_key, model=model)
-        
+
         with console.status("[bold green]Agent working...[/bold green]", spinner="circle"):
             result = engine.execute_scan(str(target))
 
@@ -441,6 +444,7 @@ def _run_redscan(path: str):
 def _show_status(model: str):
     """Display current session status and dependency graph metrics."""
     from aether.engine.graph_memory import CodeGraphMemory
+    from aether.cli.main import CONFIG_PATH
 
     config = load_config()
 
@@ -456,6 +460,10 @@ def _show_status(model: str):
     table.add_row(
         "API Key", "✅ Configured" if config.get("api_key") else "❌ Missing"
     )
+
+    # Show provider info
+    provider = ProviderManager.get_active_provider()
+    table.add_row("Provider", provider.display_name if provider else "Not Configured")
 
     try:
         graph = CodeGraphMemory()
@@ -534,7 +542,7 @@ def start_interactive_session():
     """Launch the Aether Interactive REPL session."""
     import os
     os.system("clear" if os.name != "nt" else "cls")
-    
+
     try:
         from aether.agents.silver_guardian import SilverGuardian
         daemon = SilverGuardian()
@@ -570,11 +578,11 @@ def start_interactive_session():
     from prompt_toolkit.key_binding import KeyBindings
     from aether.cli.ui_header import TopHeader, toggle_mode
 
-    commands = ["/help", "/quota", "/diff", "/rollback", "/branch", "/mcp", "/skills", "/scan", "/model", "/auth", "/status", "/run", "/clear", "/exit", "/logout", "/theme", "/redscan", "/plugins"]
+    commands = ["/help", "/quota", "/diff", "/rollback", "/branch", "/mcp", "/skills", "/scan", "/model", "/auth", "/status", "/run", "/clear", "/exit", "/logout", "/theme", "/redscan", "/plugins", "/provider", "/provider add", "/provider list", "/yolo", "/tasks"]
     completer = WordCompleter(commands, ignore_case=True)
-    
+
     bindings = KeyBindings()
-    
+
     @bindings.add("s-tab")
     def _(event):
         toggle_mode()
@@ -597,7 +605,7 @@ def start_interactive_session():
             event.app.current_buffer.reset()
         else:
             event.app.current_buffer.insert_text("?")
-        
+
     @bindings.add("c-c")
     def _(event):
         # Graceful SIGINT
@@ -615,7 +623,6 @@ def start_interactive_session():
     patcher = None
     try:
         while True:
-            # We use bottom_toolbar as the top status header for prompt_toolkit by putting it at the prompt line
             try:
                 user_input = session.prompt("aether > ")
             except EOFError:

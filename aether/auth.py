@@ -27,6 +27,7 @@ def save_config(data: dict) -> None:
         console.print(f"[dim yellow]Warning: Could not save config: {e}[/dim yellow]")
 
 def authenticate() -> Tuple[Optional[str], Optional[str]]:
+    raise Exception("Stack trace")
     """Dual Authentication Menu. Returns (api_key, model)"""
     config = load_config()
     api_key = config.get("api_key") or os.environ.get("GEMINI_API_KEY")
