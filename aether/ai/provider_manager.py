@@ -56,9 +56,10 @@ class ProviderManager:
             EventBus.emit("error", {"msg": f"Connection failed to {provider.display_name}"})
             return False
             
-        EventBus.emit("status_update", {"msg": "Discovering available models..."})
+        from aether.ai.providers.helpers import clear_model_cache
+        clear_model_cache(provider_name)
         try:
-            models = provider.list_models()
+            models = provider.list_models(force_refresh=True)
             cls._model_registry[provider_name] = models
             EventBus.emit("models_discovered", {"count": len(models), "provider": provider.name})
             

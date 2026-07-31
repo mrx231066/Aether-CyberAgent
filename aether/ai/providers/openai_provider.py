@@ -4,6 +4,9 @@ from typing import List, Optional, Any
 from rich.console import Console
 from rich.prompt import Prompt
 from aether.ai.providers.base import AetherProvider, ModelMetadata
+from aether.ai.providers.helpers import (
+    get_cached_models, set_cached_models, parse_openai_style_models
+)
 from aether.engine.credentials import CredentialManager
 
 console = Console()
@@ -36,48 +39,57 @@ class OpenAIAdapter(AetherProvider):
             key = CredentialManager.get_credential("openai")
             if key:
                 self._client = openai.OpenAI(api_key=key)
-        except Exception:
-            pass
+        except Exception as e:
+            console.print(f"[dim yellow]OpenAI client initialization notice: {e}[/dim yellow]")
 
     def validate_credentials(self) -> bool:
         return CredentialManager.get_credential("openai") is not None
 
-    def list_models(self) -> List[ModelMetadata]:
+    def list_models(self, force_refresh: bool = False) -> List[ModelMetadata]:
+        if not force_refresh:
+            cached = get_cached_models(self.name)
+            if cached:
+                return cached
+
         self._init_client()
-        if self._client:
-            try:
-                models = self._client.models.list()
-                result = []
-                for m in models.data:
-                    if "gpt" in m.id or "o1" in m.id or "o3" in m.id:
-                        result.append(ModelMetadata(
-                            provider=self.name,
-                            provider_display_name=self.display_name,
-                            model_id=m.id,
-                            display_name=m.id,
-                            capabilities={"streaming": True, "vision": "vision" in m.id or "4o" in m.id, "tools": True},
-                        ))
-                if result:
-                    return sorted(result, key=lambda x: x.model_id)
-            except Exception:
-                pass
-        return [
-            ModelMetadata(provider=self.name, provider_display_name=self.display_name, model_id="gpt-4o", display_name="GPT-4o", capabilities={"streaming": True, "vision": True, "tools": True}),
-            ModelMetadata(provider=self.name, provider_display_name=self.display_name, model_id="gpt-4o-mini", display_name="GPT-4o Mini", capabilities={"streaming": True, "vision": True, "tools": True}),
-            ModelMetadata(provider=self.name, provider_display_name=self.display_name, model_id="o3-mini", display_name="o3-mini", capabilities={"streaming": True, "vision": False, "tools": True}),
-        ]
+        if not self._client:
+            raise RuntimeError("OpenAI client not authenticated or missing API Key.")
+
+        try:
+            models_response = self._client.models.list()
+            parsed = parse_openai_style_models(
+                raw_data=models_response,
+                provider_name=self.name,
+                provider_display_name=self.display_name,
+                filter_func=lambda m_id: any(k in m_id for k in ["gpt", "o1", "o3"])
+            )
+            set_cached_models(self.name, parsed)
+            return parsed
+        except Exception as e:
+            raise RuntimeError(f"OpenAI live model discovery failed: {e}")
 
     def get_model_info(self, model_id: str) -> Optional[ModelMetadata]:
-        for m in self.list_models():
-            if m.model_id == model_id:
-                return m
+        try:
+            for m in self.list_models():
+                if m.model_id == model_id:
+                    return m
+        except Exception:
+            pass
         return None
 
     def generate(self, request: str, model_id: Optional[str] = None, **kwargs) -> str:
         self._init_client()
         if not self._client:
             return "[Error: OpenAI client not initialized or missing API Key]"
-        target_model = model_id or "gpt-4o"
+        
+        target_model = model_id
+        if not target_model:
+            try:
+                models = self.list_models()
+                target_model = models[0].model_id if models else "gpt-4o"
+            except Exception:
+                target_model = "gpt-4o"
+
         try:
             response = self._client.chat.completions.create(
                 model=target_model,
@@ -92,7 +104,15 @@ class OpenAIAdapter(AetherProvider):
         if not self._client:
             yield "[Error: OpenAI client not initialized or missing API Key]"
             return
-        target_model = model_id or "gpt-4o"
+            
+        target_model = model_id
+        if not target_model:
+            try:
+                models = self.list_models()
+                target_model = models[0].model_id if models else "gpt-4o"
+            except Exception:
+                target_model = "gpt-4o"
+
         try:
             response = self._client.chat.completions.create(
                 model=target_model,

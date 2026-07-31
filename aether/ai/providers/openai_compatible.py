@@ -1,13 +1,15 @@
 """OpenAI-Compatible Provider Adapter for Aether-CyberAgent.
 
-Supports: OpenRouter, Moonshot/Kimi, Z.ai/GLM, vLLM, and any
-OpenAI-compatible API endpoint.
+Supports: OpenRouter, Moonshot/Kimi, Z.ai/GLM, vLLM, and any custom OpenAI-compatible API endpoint.
 """
 
 from typing import List, Optional, Any
 from rich.console import Console
 from rich.prompt import Prompt
 from aether.ai.providers.base import AetherProvider, ModelMetadata
+from aether.ai.providers.helpers import (
+    get_cached_models, set_cached_models, parse_openai_style_models
+)
 from aether.engine.credentials import CredentialManager
 
 console = Console()
@@ -17,11 +19,11 @@ class OpenAICompatibleAdapter(AetherProvider):
     """Generic adapter for any OpenAI-compatible API."""
 
     def __init__(self, provider_id: str, provider_name: str, base_url: str,
-                 default_models: list = None):
+                 models_endpoint: Optional[str] = None):
         self.name = provider_id
         self.display_name = provider_name
-        self._base_url = base_url
-        self._default_models = default_models or []
+        self._base_url = base_url.rstrip("/")
+        self._models_endpoint = models_endpoint
         self._is_authenticated = False
         self._client = None
 
@@ -43,51 +45,70 @@ class OpenAICompatibleAdapter(AetherProvider):
             key = CredentialManager.get_credential(self.name)
             if key:
                 self._client = openai.OpenAI(api_key=key, base_url=self._base_url)
-        except Exception:
-            pass
+        except Exception as e:
+            console.print(f"[dim yellow]{self.display_name} client initialization notice: {e}[/dim yellow]")
 
     def validate_credentials(self) -> bool:
         return CredentialManager.get_credential(self.name) is not None
 
-    def list_models(self) -> List[ModelMetadata]:
+    def list_models(self, force_refresh: bool = False) -> List[ModelMetadata]:
+        if not force_refresh:
+            cached = get_cached_models(self.name)
+            if cached:
+                return cached
+
         self._init_client()
-        if self._client:
-            try:
-                models = self._client.models.list()
-                result = []
-                for m in models.data:
-                    result.append(ModelMetadata(
-                        provider=self.name,
-                        provider_display_name=self.display_name,
-                        model_id=m.id,
-                        display_name=m.id,
-                        capabilities={"streaming": True, "tools": True},
-                    ))
-                if result:
-                    return sorted(result, key=lambda x: x.model_id)
-            except Exception:
-                pass
-        return [
-            ModelMetadata(
-                provider=self.name,
-                provider_display_name=self.display_name,
-                model_id=m["id"],
-                display_name=m["name"],
-                capabilities=m.get("capabilities", {"streaming": True}),
-            ) for m in self._default_models
-        ]
+        if not self._client:
+            raise RuntimeError(f"{self.display_name} client not authenticated or missing API Key.")
+
+        # Attempt HTTP GET via httpx if explicit endpoint or standard client.models.list()
+        try:
+            raw_data = None
+            if self._models_endpoint:
+                import httpx
+                key = CredentialManager.get_credential(self.name)
+                headers = {"Authorization": f"Bearer {key}"} if key else {}
+                resp = httpx.get(self._models_endpoint, headers=headers, timeout=10)
+                if resp.status_code == 200:
+                    raw_data = resp.json()
+                else:
+                    raise RuntimeError(f"HTTP {resp.status_code}: {resp.text[:100]}")
+
+            if raw_data is None:
+                raw_data = self._client.models.list()
+
+            parsed = parse_openai_style_models(
+                raw_data=raw_data,
+                provider_name=self.name,
+                provider_display_name=self.display_name
+            )
+            set_cached_models(self.name, parsed)
+            return parsed
+        except Exception as e:
+            raise RuntimeError(f"{self.display_name} live model discovery failed: {e}")
 
     def get_model_info(self, model_id: str) -> Optional[ModelMetadata]:
-        for m in self.list_models():
-            if m.model_id == model_id:
-                return m
+        try:
+            for m in self.list_models():
+                if m.model_id == model_id:
+                    return m
+        except Exception:
+            pass
         return None
 
     def generate(self, request: str, model_id: Optional[str] = None, **kwargs) -> str:
         self._init_client()
         if not self._client:
             return f"[Error: {self.display_name} client not initialized or missing API Key]"
-        target_model = model_id or (self._default_models[0]["id"] if self._default_models else "default")
+            
+        target_model = model_id
+        if not target_model:
+            try:
+                models = self.list_models()
+                target_model = models[0].model_id if models else "default"
+            except Exception:
+                target_model = "default"
+
         try:
             response = self._client.chat.completions.create(
                 model=target_model,
@@ -102,7 +123,15 @@ class OpenAICompatibleAdapter(AetherProvider):
         if not self._client:
             yield f"[Error: {self.display_name} client not initialized or missing API Key]"
             return
-        target_model = model_id or (self._default_models[0]["id"] if self._default_models else "default")
+            
+        target_model = model_id
+        if not target_model:
+            try:
+                models = self.list_models()
+                target_model = models[0].model_id if models else "default"
+            except Exception:
+                target_model = "default"
+
         try:
             response = self._client.chat.completions.create(
                 model=target_model,
@@ -131,12 +160,7 @@ def create_openrouter_adapter() -> OpenAICompatibleAdapter:
         provider_id="openrouter",
         provider_name="OpenRouter",
         base_url="https://openrouter.ai/api/v1",
-        default_models=[
-            {"id": "openai/gpt-4o", "name": "GPT-4o (via OpenRouter)"},
-            {"id": "anthropic/claude-sonnet-4", "name": "Claude Sonnet 4 (via OpenRouter)"},
-            {"id": "google/gemini-2.5-pro", "name": "Gemini 2.5 Pro (via OpenRouter)"},
-            {"id": "meta-llama/llama-3.1-405b", "name": "Llama 3.1 405B (via OpenRouter)"},
-        ],
+        models_endpoint="https://openrouter.ai/api/v1/models",
     )
 
 def create_moonshot_adapter() -> OpenAICompatibleAdapter:
@@ -144,11 +168,7 @@ def create_moonshot_adapter() -> OpenAICompatibleAdapter:
         provider_id="moonshot",
         provider_name="Moonshot AI / Kimi",
         base_url="https://api.moonshot.cn/v1",
-        default_models=[
-            {"id": "moonshot-v1-8k", "name": "Moonshot v1 8K"},
-            {"id": "moonshot-v1-32k", "name": "Moonshot v1 32K"},
-            {"id": "moonshot-v1-128k", "name": "Moonshot v1 128K"},
-        ],
+        models_endpoint="https://api.moonshot.cn/v1/models",
     )
 
 def create_zai_adapter() -> OpenAICompatibleAdapter:
@@ -156,11 +176,7 @@ def create_zai_adapter() -> OpenAICompatibleAdapter:
         provider_id="zai",
         provider_name="Z.ai / GLM",
         base_url="https://open.bigmodel.cn/api/paas/v4",
-        default_models=[
-            {"id": "glm-4-plus", "name": "GLM-4 Plus"},
-            {"id": "glm-4-flash", "name": "GLM-4 Flash"},
-            {"id": "glm-4v-plus", "name": "GLM-4V Plus (Vision)"},
-        ],
+        models_endpoint="https://open.bigmodel.cn/api/paas/v4/models",
     )
 
 def create_vllm_adapter(base_url: str = "http://localhost:8000/v1") -> OpenAICompatibleAdapter:
@@ -168,7 +184,7 @@ def create_vllm_adapter(base_url: str = "http://localhost:8000/v1") -> OpenAICom
         provider_id="vllm",
         provider_name="vLLM (Local)",
         base_url=base_url,
-        default_models=[],
+        models_endpoint=f"{base_url.rstrip('/')}/models",
     )
 
 def create_custom_adapter(provider_id: str, provider_name: str, base_url: str) -> OpenAICompatibleAdapter:
@@ -176,5 +192,5 @@ def create_custom_adapter(provider_id: str, provider_name: str, base_url: str) -
         provider_id=provider_id,
         provider_name=provider_name,
         base_url=base_url,
-        default_models=[],
+        models_endpoint=f"{base_url.rstrip('/')}/models",
     )

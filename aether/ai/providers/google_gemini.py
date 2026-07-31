@@ -7,6 +7,7 @@ from typing import List, Optional, Any
 from rich.console import Console
 from rich.prompt import Prompt
 from aether.ai.providers.base import AetherProvider, ModelMetadata
+from aether.ai.providers.helpers import get_cached_models, set_cached_models
 from aether.engine.credentials import CredentialManager
 
 console = Console()
@@ -65,7 +66,6 @@ class GoogleGeminiAdapter(AetherProvider):
             self._is_authenticated = True
             self._auth_method = "oauth"
             
-            # Save OAuth token for future sessions
             try:
                 cred_info = {
                     "token": credentials.token,
@@ -100,12 +100,10 @@ class GoogleGeminiAdapter(AetherProvider):
         try:
             from google import genai
             
-            # 1. Try active OAuth credentials instance
             if hasattr(self, "_oauth_credentials") and self._oauth_credentials:
                 self._client = genai.Client(credentials=self._oauth_credentials)
                 return
 
-            # 2. Try stored OAuth token JSON
             oauth_json = CredentialManager.get_credential("google_gemini_oauth")
             if oauth_json:
                 try:
@@ -118,7 +116,6 @@ class GoogleGeminiAdapter(AetherProvider):
                 except Exception:
                     pass
 
-            # 3. Try API Key
             api_key = CredentialManager.get_credential("google_gemini")
             if api_key:
                 self._client = genai.Client(api_key=api_key)
@@ -132,64 +129,91 @@ class GoogleGeminiAdapter(AetherProvider):
             CredentialManager.get_credential("google_gemini") is not None
         )
 
-    def list_models(self) -> List[ModelMetadata]:
-        self._init_client()
-        if self._client:
-            try:
-                models = self._client.models.list()
-                result = []
-                for m in models:
-                    name = getattr(m, "name", "")
-                    disp = getattr(m, "display_name", name)
-                    if "gemini" in name.lower():
-                        result.append(ModelMetadata(
-                            provider=self.name,
-                            provider_display_name=self.display_name,
-                            model_id=name,
-                            display_name=disp or name,
-                            capabilities={"streaming": True, "vision": True, "tools": True},
-                            context_length=1048576
-                        ))
-                if result:
-                    return result
-            except Exception:
-                pass
+    def list_models(self, force_refresh: bool = False) -> List[ModelMetadata]:
+        if not force_refresh:
+            cached = get_cached_models(self.name)
+            if cached:
+                return cached
 
-        return [
-            ModelMetadata(provider=self.name, provider_display_name=self.display_name, model_id="gemini-2.5-pro", display_name="Gemini 2.5 Pro", capabilities={"streaming": True, "vision": True, "tools": True}, context_length=1048576),
-            ModelMetadata(provider=self.name, provider_display_name=self.display_name, model_id="gemini-1.5-pro-latest", display_name="Gemini 1.5 Pro", capabilities={"streaming": True, "vision": True, "tools": True}, context_length=1048576),
-            ModelMetadata(provider=self.name, provider_display_name=self.display_name, model_id="gemini-1.5-flash-latest", display_name="Gemini 1.5 Flash", capabilities={"streaming": True, "vision": True, "tools": True}, context_length=1048576),
-        ]
+        self._init_client()
+        if not self._client:
+            raise RuntimeError("Google Gemini client not authenticated or missing API Key/OAuth Credentials.")
+
+        try:
+            # Live model discovery via google-genai SDK
+            models = self._client.models.list()
+            result = []
+            for m in models:
+                name = getattr(m, "name", "")
+                disp = getattr(m, "display_name", name)
+                if "gemini" in name.lower():
+                    clean_id = name.replace("models/", "") if name.startswith("models/") else name
+                    result.append(ModelMetadata(
+                        provider=self.name,
+                        provider_display_name=self.display_name,
+                        model_id=clean_id,
+                        display_name=disp or clean_id,
+                        capabilities={"streaming": True, "vision": True, "tools": True},
+                        context_length=1048576
+                    ))
+
+            if not result:
+                raise ValueError("No Gemini models returned by Google GenAI API.")
+
+            sorted_result = sorted(result, key=lambda x: x.model_id)
+            set_cached_models(self.name, sorted_result)
+            return sorted_result
+        except Exception as e:
+            raise RuntimeError(f"Google Gemini live model discovery failed: {e}")
 
     def get_model_info(self, model_id: str) -> Optional[ModelMetadata]:
-        for m in self.list_models():
-            if m.model_id == model_id:
-                return m
+        try:
+            for m in self.list_models():
+                if m.model_id == model_id:
+                    return m
+        except Exception:
+            pass
         return None
 
-    def generate(self, request: str, model_id: str = "gemini-2.5-pro", **kwargs) -> str:
+    def generate(self, request: str, model_id: Optional[str] = None, **kwargs) -> str:
         self._init_client()
         if not self._client:
             return f"[Error: Gemini SDK not initialized or missing API Key/OAuth Credentials]"
         
+        target_model = model_id
+        if not target_model:
+            try:
+                models = self.list_models()
+                target_model = models[0].model_id if models else "gemini-2.5-pro"
+            except Exception:
+                target_model = "gemini-2.5-pro"
+
         try:
             response = self._client.models.generate_content(
-                model=model_id,
+                model=target_model,
                 contents=request,
             )
             return response.text
         except Exception as e:
             return f"[Gemini API Error: {str(e)}]"
 
-    def stream(self, request: str, model_id: str = "gemini-2.5-pro", **kwargs) -> Any:
+    def stream(self, request: str, model_id: Optional[str] = None, **kwargs) -> Any:
         self._init_client()
         if not self._client:
             yield f"[Error: Gemini SDK not initialized or missing API Key/OAuth Credentials]"
             return
             
+        target_model = model_id
+        if not target_model:
+            try:
+                models = self.list_models()
+                target_model = models[0].model_id if models else "gemini-2.5-pro"
+            except Exception:
+                target_model = "gemini-2.5-pro"
+
         try:
             response = self._client.models.generate_content_stream(
-                model=model_id,
+                model=target_model,
                 contents=request,
             )
             for chunk in response:

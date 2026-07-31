@@ -4,6 +4,7 @@ from typing import List, Optional, Any
 from rich.console import Console
 from rich.prompt import Prompt
 from aether.ai.providers.base import AetherProvider, ModelMetadata
+from aether.ai.providers.helpers import get_cached_models, set_cached_models
 
 console = Console()
 
@@ -14,7 +15,7 @@ class OllamaAdapter(AetherProvider):
     display_name = "Ollama (Local)"
 
     def __init__(self, base_url: str = "http://localhost:11434"):
-        self._base_url = base_url
+        self._base_url = base_url.rstrip("/")
         self._is_authenticated = True
 
     def authenticate(self) -> bool:
@@ -22,23 +23,28 @@ class OllamaAdapter(AetherProvider):
         console.print("│       [bold green]OLLAMA LOCAL SETUP[/bold green]             │")
         console.print("╰──────────────────────────────────────╯")
         url = Prompt.ask("Ollama URL", default=self._base_url)
-        self._base_url = url
+        self._base_url = url.rstrip("/")
         if self.health_check():
             console.print("[bold green]✅ Connected to Ollama![/bold green]")
             return True
-        console.print("[red]❌ Cannot reach Ollama at {self._base_url}. Is it running?[/red]")
+        console.print(f"[red]❌ Cannot reach Ollama at {self._base_url}. Is it running?[/red]")
         return False
 
     def validate_credentials(self) -> bool:
         return True
 
-    def list_models(self) -> List[ModelMetadata]:
+    def list_models(self, force_refresh: bool = False) -> List[ModelMetadata]:
+        if not force_refresh:
+            cached = get_cached_models(self.name)
+            if cached:
+                return cached
+
         try:
             import httpx
             resp = httpx.get(f"{self._base_url}/api/tags", timeout=5)
             if resp.status_code == 200:
                 data = resp.json()
-                return [
+                models = [
                     ModelMetadata(
                         provider=self.name,
                         provider_display_name=self.display_name,
@@ -48,19 +54,32 @@ class OllamaAdapter(AetherProvider):
                         context_length=0,
                     ) for m in data.get("models", [])
                 ]
-        except Exception:
-            pass
-        return []
+                if not models:
+                    raise ValueError("No Ollama models found locally. Run 'ollama pull <model>'.")
+                sorted_models = sorted(models, key=lambda x: x.model_id)
+                set_cached_models(self.name, sorted_models)
+                return sorted_models
+            else:
+                raise RuntimeError(f"HTTP {resp.status_code} from Ollama server.")
+        except Exception as e:
+            raise RuntimeError(f"Ollama live model discovery failed: {e}")
 
     def get_model_info(self, model_id: str) -> Optional[ModelMetadata]:
-        for m in self.list_models():
-            if m.model_id == model_id:
-                return m
+        try:
+            for m in self.list_models():
+                if m.model_id == model_id:
+                    return m
+        except Exception:
+            pass
         return None
 
     def generate(self, request: str, model_id: Optional[str] = None, **kwargs) -> str:
-        models = self.list_models()
-        target_model = model_id or (models[0].model_id if models else "llama3")
+        try:
+            models = self.list_models()
+            target_model = model_id or models[0].model_id
+        except Exception as e:
+            return f"[Ollama Error: {e}]"
+
         try:
             import httpx
             resp = httpx.post(
@@ -75,8 +94,13 @@ class OllamaAdapter(AetherProvider):
             return f"[Ollama Error: {e}]"
 
     def stream(self, request: str, model_id: Optional[str] = None, **kwargs) -> Any:
-        models = self.list_models()
-        target_model = model_id or (models[0].model_id if models else "llama3")
+        try:
+            models = self.list_models()
+            target_model = model_id or models[0].model_id
+        except Exception as e:
+            yield f"[Ollama Error: {e}]"
+            return
+
         try:
             import httpx
             with httpx.stream(
