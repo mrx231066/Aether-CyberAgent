@@ -663,10 +663,16 @@ def _chat_with_agent(user_input: str, api_key: str, model: str, patcher=None):
             
             # Multi-Stage Dynamic UI Animations
             with console.status("[bold cyan]🔍 Analyzing query...[/bold cyan]", spinner="dots") as status:
-                time.sleep(0.15)
-                status.update("[bold yellow]🧠 Searching codebase graph & memory...[/bold yellow]", spinner="earth")
-                time.sleep(0.15)
-                status.update("[bold magenta]⚡ Synthesizing AI response...[/bold magenta]", spinner="pulse")
+                time.sleep(0.12)
+                try:
+                    status.update("[bold yellow]🧠 Searching codebase graph & memory...[/bold yellow]", spinner="earth")
+                except Exception:
+                    status.update("[bold yellow]🧠 Searching codebase graph & memory...[/bold yellow]")
+                time.sleep(0.12)
+                try:
+                    status.update("[bold magenta]⚡ Synthesizing AI response...[/bold magenta]", spinner="moon")
+                except Exception:
+                    status.update("[bold magenta]⚡ Synthesizing AI response...[/bold magenta]")
                 
                 stream_gen = provider.stream(user_input, active_model)
                 first_chunk = None
@@ -682,7 +688,8 @@ def _chat_with_agent(user_input: str, api_key: str, model: str, patcher=None):
                 first_str = str(first_chunk)
                 full_response += first_str
                 for char in first_str:
-                    console.print(char, end="", flush=True)
+                    sys.stdout.write(char)
+                    sys.stdout.flush()
                     time.sleep(0.003)
 
                 for chunk in stream_gen:
@@ -690,7 +697,8 @@ def _chat_with_agent(user_input: str, api_key: str, model: str, patcher=None):
                         chunk_str = str(chunk)
                         full_response += chunk_str
                         for char in chunk_str:
-                            console.print(char, end="", flush=True)
+                            sys.stdout.write(char)
+                            sys.stdout.flush()
                             time.sleep(0.002)
 
             console.print("\n")
