@@ -4,9 +4,12 @@ Handles active routing, fallbacks, and the unified model registry.
 """
 
 from typing import Dict, List, Optional
+from rich.console import Console
 from aether.ai.providers.base import AetherProvider, ModelMetadata
 from aether.engine.events import EventBus
 from aether.engine.errors import ProviderError
+
+console = Console()
 
 class ProviderManager:
     """Central orchestrator for AI Provider integrations."""
