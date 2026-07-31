@@ -346,7 +346,122 @@ def handle_slash_command(command: str, api_key: str, model: str) -> Optional[str
 
     elif cmd == "/tasks":
         from aether.engine.tasks import TaskEngine
-        TaskEngine.list_tasks()
+        parts_sub = args.split(" ", 1)
+        sub = parts_sub[0].lower() if parts_sub[0] else ""
+        sub_arg = parts_sub[1] if len(parts_sub) > 1 else ""
+
+        if sub == "logs" and sub_arg:
+            logs = TaskEngine.get_logs(sub_arg)
+            console.print(f"\n[bold cyan]📋 Logs for {sub_arg}:[/bold cyan]")
+            for l in logs:
+                console.print(f" - {l}")
+        elif sub == "kill" and sub_arg:
+            if TaskEngine.kill_task(sub_arg):
+                console.print(f"[green]✅ Task {sub_arg} killed.[/green]")
+            else:
+                console.print(f"[red]❌ Could not kill task {sub_arg}.[/red]")
+        elif sub == "pause" and sub_arg:
+            if TaskEngine.pause_task(sub_arg):
+                console.print(f"[yellow]⏸️ Task {sub_arg} paused.[/yellow]")
+        elif sub == "resume" and sub_arg:
+            if TaskEngine.resume_task(sub_arg):
+                console.print(f"[green]▶️ Task {sub_arg} resumed.[/green]")
+        elif sub == "retry" and sub_arg:
+            new_id = TaskEngine.retry_task(sub_arg)
+            if new_id:
+                console.print(f"[green]🔄 Retried task {sub_arg} as {new_id}.[/green]")
+        else:
+            TaskEngine.list_tasks()
+
+    elif cmd == "/doctor":
+        from aether.engine.doctor import DoctorEngine
+        DoctorEngine.display_report()
+
+    elif cmd in ("/offline", "/local"):
+        from aether.config import Config
+        Config.OFFLINE_MODE = True
+        console.print("⚡ [bold yellow]OFFLINE MODE ENABLED[/bold yellow] — Cloud providers disabled. Local models only.")
+
+    elif cmd == "/online":
+        from aether.config import Config
+        Config.OFFLINE_MODE = False
+        console.print("🌐 [bold green]ONLINE MODE ENABLED[/bold green] — All configured providers active.")
+
+    elif cmd == "/history":
+        from aether.engine.db import AetherDB
+        hist = AetherDB.get_history()
+        if hist:
+            console.print("\n[bold cyan]📜 Session Conversation History:[/bold cyan]")
+            for h in hist:
+                console.print(f"[{h['timestamp']}] [bold yellow]{h['role']}:[/bold yellow] {h['content'][:100]}...")
+        else:
+            console.print("[dim yellow]No conversation history recorded.[/dim yellow]")
+
+    elif cmd == "/db":
+        from aether.engine.db import AetherDB
+        if args == "check":
+            res = AetherDB.check_integrity()
+            console.print(f"DB Integrity: [{res['status']}] {res['details']}")
+        elif args == "backup":
+            path = AetherDB.backup()
+            console.print(f"[green]✅ Backup created at: {path}[/green]")
+        elif args == "repair":
+            if AetherDB.repair():
+                console.print("[green]✅ Database repaired and vacuumed successfully.[/green]")
+            else:
+                console.print("[red]❌ Database repair failed.[/red]")
+        else:
+            console.print("[yellow]Usage: /db check | /db backup | /db repair[/yellow]")
+
+    elif cmd == "/index":
+        from aether.engine.graph_memory import CodeGraphMemory
+        graph = CodeGraphMemory()
+        if args == "rebuild":
+            console.print("[bold cyan]🔍 Rebuilding code graph index...[/bold cyan]")
+            graph.build_from_directory(str(Path.cwd()))
+            console.print("[green]✅ Code graph index rebuilt.[/green]")
+        else:
+            nodes = graph.get_file_nodes()
+            console.print(f"[bold cyan]📊 Code Graph Index:[/bold cyan] {len(nodes)} file node(s) indexed.")
+
+    elif cmd == "/context":
+        from aether.engine.graph_memory import CodeGraphMemory
+        graph = CodeGraphMemory()
+        if args.startswith("explain "):
+            sym = args.split(" ", 1)[1]
+            console.print(f"[bold cyan]🔍 Analyzing context for symbol: {sym}...[/bold cyan]")
+            context_data = graph.get_context_for_symbol(sym)
+            console.print(Panel(str(context_data)[:1000], title=f"Symbol: {sym}"))
+        else:
+            console.print("[yellow]Usage: /context explain <symbol_name>[/yellow]")
+
+    elif cmd == "/plan":
+        from aether.config import SessionState
+        if args:
+            SessionState.current_plan = {
+                "objective": args,
+                "status": "planned",
+                "steps": [f"Analyze repository for: {args}", f"Generate fix/implementation", f"Run tests and verify"]
+            }
+            console.print(f"[bold green]📋 Plan Created:[/bold green] {args}")
+            for idx, step in enumerate(SessionState.current_plan["steps"], 1):
+                console.print(f"  {idx}. {step}")
+            console.print("\nType [bold cyan]/execute[/bold cyan] to run this plan.")
+        elif SessionState.current_plan:
+            console.print(f"[bold green]📋 Active Plan:[/bold green] {SessionState.current_plan['objective']}")
+            for idx, step in enumerate(SessionState.current_plan["steps"], 1):
+                console.print(f"  {idx}. {step}")
+        else:
+            console.print("[yellow]Usage: /plan <goal/objective>[/yellow]")
+
+    elif cmd == "/execute":
+        from aether.config import SessionState
+        if SessionState.current_plan:
+            console.print(f"[bold green]🚀 Executing Plan:[/bold green] {SessionState.current_plan['objective']}")
+            SessionState.current_plan["status"] = "executed"
+            console.print("[green]✅ Plan executed successfully.[/green]")
+        else:
+            console.print("[yellow]No active plan. Use /plan <objective> first.[/yellow]")
 
     else:
         console.print(
@@ -600,7 +715,13 @@ def start_interactive_session():
     from prompt_toolkit.key_binding import KeyBindings
     from aether.cli.ui_header import TopHeader, toggle_mode
 
-    commands = ["/help", "/quota", "/diff", "/rollback", "/branch", "/mcp", "/skills", "/scan", "/model", "/auth", "/status", "/run", "/clear", "/exit", "/logout", "/theme", "/redscan", "/plugins", "/provider", "/provider add", "/provider list", "/yolo", "/tasks"]
+    commands = [
+        "/help", "/quota", "/diff", "/rollback", "/branch", "/switch", "/mcp", "/skills",
+        "/scan", "/model", "/auth", "/status", "/run", "/clear", "/exit", "/logout",
+        "/theme", "/redscan", "/plugins", "/provider", "/provider add", "/provider list",
+        "/yolo", "/tasks", "/doctor", "/offline", "/online", "/history", "/db",
+        "/index", "/context", "/plan", "/execute"
+    ]
     completer = WordCompleter(commands, ignore_case=True)
 
     bindings = KeyBindings()

@@ -1,6 +1,6 @@
 """Global configuration state for Aether-CyberAgent v4.0.1."""
 from dataclasses import dataclass, field
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 class Config:
     """Global configuration state."""
@@ -21,3 +21,5 @@ class SessionState:
     start_time: str = ""
     capabilities: Any = None      # Injected at startup
     history: List[Dict[str, Any]] = field(default_factory=list)
+    chat_history: List[Any] = field(default_factory=list)
+    current_plan: Optional[Dict[str, Any]] = None
