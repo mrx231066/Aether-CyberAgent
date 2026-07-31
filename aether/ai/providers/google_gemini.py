@@ -1,9 +1,11 @@
 """Google Gemini Provider Adapter for Aether-CyberAgent.
 
-Uses standard Google AI Studio API Key authentication via official google-genai SDK.
+Supports Google Account Login (OAuth) and Gemini API Key authentication via google-genai SDK.
 Live model discovery is enforced via client.models.list().
 """
 
+import json
+from pathlib import Path
 from typing import List, Optional, Any
 from rich.console import Console
 from rich.prompt import Prompt
@@ -15,7 +17,7 @@ console = Console()
 
 
 class GoogleGeminiAdapter(AetherProvider):
-    """Adapter for Google Gemini API via google-genai SDK (API Key authentication)."""
+    """Adapter for Google Gemini API supporting OAuth and API Key authentication."""
     
     name = "google_gemini"
     display_name = "Google Gemini"
@@ -23,13 +25,74 @@ class GoogleGeminiAdapter(AetherProvider):
     def __init__(self):
         self._is_authenticated = False
         self._client = None
+        self._oauth_credentials = None
 
     def authenticate(self) -> bool:
         console.print("\n╭──────────────────────────────────────╮")
         console.print("│       [bold blue]GOOGLE GEMINI SETUP[/bold blue]            │")
+        console.print("├──────────────────────────────────────┤")
+        console.print("│ 1. Google Account Login (OAuth)      │")
+        console.print("│ 2. Gemini API Key                    │")
+        console.print("│ 3. Cancel                            │")
         console.print("╰──────────────────────────────────────╯")
-        console.print("[dim]Get your API key from Google AI Studio: https://aistudio.google.com/app/apikey[/dim]\n")
         
+        choice = Prompt.ask("Select authentication method", choices=["1", "2", "3"])
+        
+        if choice == "1":
+            return self._auth_oauth()
+        elif choice == "2":
+            return self._auth_api_key()
+        return False
+
+    def _auth_oauth(self) -> bool:
+        try:
+            from google_auth_oauthlib.flow import InstalledAppFlow
+            client_secrets = Path.home() / "client_secrets.json"
+            if not client_secrets.exists():
+                console.print("[yellow]⚠️ client_secrets.json not found in home directory (~/client_secrets.json).[/yellow]")
+                console.print("[cyan]Falling back to Gemini API Key authentication...[/cyan]\n")
+                return self._auth_api_key()
+            
+            flow = InstalledAppFlow.from_client_secrets_file(
+                str(client_secrets),
+                scopes=[
+                    "openid",
+                    "https://www.googleapis.com/auth/userinfo.email",
+                    "https://www.googleapis.com/auth/userinfo.profile",
+                    "https://www.googleapis.com/auth/cloud-platform"
+                ]
+            )
+            console.print("[bold cyan]Opening local server for OAuth... please follow the link provided below![/bold cyan]")
+            credentials = flow.run_local_server(port=0, open_browser=False)
+            
+            from google import genai
+            test_client = genai.Client(credentials=credentials)
+            models = list(test_client.models.list())
+            if not models:
+                console.print("[red]❌ Google Gemini OAuth returned no models.[/red]")
+                return False
+                
+            self._client = test_client
+            self._oauth_credentials = credentials
+            
+            cred_dict = {
+                "token": credentials.token,
+                "refresh_token": credentials.refresh_token,
+                "token_uri": credentials.token_uri,
+                "client_id": credentials.client_id,
+                "client_secret": credentials.client_secret,
+                "scopes": credentials.scopes
+            }
+            CredentialManager.save_credential("google_gemini_oauth", json.dumps(cred_dict))
+            self._is_authenticated = True
+            console.print("[bold green]✅ Authenticated via Google OAuth & verified successfully![/bold green]")
+            return True
+        except Exception as e:
+            console.print(f"[bold red]❌ OAuth authentication failed ({e}). Falling back to Gemini API Key...[/bold red]\n")
+            return self._auth_api_key()
+
+    def _auth_api_key(self) -> bool:
+        console.print("[dim]Get your API key from Google AI Studio: https://aistudio.google.com/app/apikey[/dim]\n")
         api_key = Prompt.ask("Enter Gemini API Key", password=True)
         if not api_key:
             console.print("[red]❌ No API Key entered.[/red]")
@@ -57,22 +120,37 @@ class GoogleGeminiAdapter(AetherProvider):
         if self._client:
             return True
             
-        api_key = CredentialManager.get_credential("google_gemini")
-        if not api_key:
-            self._client = None
-            return False
+        # Check OAuth credentials first
+        oauth_json = CredentialManager.get_credential("google_gemini_oauth")
+        if oauth_json:
+            try:
+                from google import genai
+                from google.oauth2.credentials import Credentials
+                cred_dict = json.loads(oauth_json)
+                creds = Credentials.from_authorized_user_info(cred_dict)
+                self._client = genai.Client(credentials=creds)
+                return True
+            except Exception as e:
+                console.print(f"[dim yellow]Failed to load OAuth credentials ({e}), checking API Key...[/dim yellow]")
 
-        try:
-            from google import genai
-            self._client = genai.Client(api_key=api_key)
-            return True
-        except Exception as e:
-            console.print(f"[bold red]❌ Failed to initialize Google GenAI SDK: {e}[/bold red]")
-            self._client = None
-            return False
+        # Check API key
+        api_key = CredentialManager.get_credential("google_gemini")
+        if api_key:
+            try:
+                from google import genai
+                self._client = genai.Client(api_key=api_key)
+                return True
+            except Exception as e:
+                console.print(f"[bold red]❌ Failed to initialize Google GenAI SDK: {e}[/bold red]")
+
+        self._client = None
+        return False
 
     def validate_credentials(self) -> bool:
-        return CredentialManager.get_credential("google_gemini") is not None
+        return (
+            CredentialManager.get_credential("google_gemini_oauth") is not None or
+            CredentialManager.get_credential("google_gemini") is not None
+        )
 
     def list_models(self, force_refresh: bool = False) -> List[ModelMetadata]:
         if not force_refresh:
@@ -80,9 +158,8 @@ class GoogleGeminiAdapter(AetherProvider):
             if cached:
                 return cached
 
-        api_key = CredentialManager.get_credential("google_gemini")
-        if not api_key:
-            raise RuntimeError("No credentials provided: Google Gemini API Key is missing. Please set it via /provider add.")
+        if not self.validate_credentials():
+            raise RuntimeError("No credentials provided: Google Gemini API Key or OAuth login is missing. Please set it via /provider add.")
 
         if not self._client:
             if not self._init_client():
@@ -131,7 +208,7 @@ class GoogleGeminiAdapter(AetherProvider):
 
     def generate(self, request: str, model_id: Optional[str] = None, **kwargs) -> str:
         if not self._client and not self._init_client():
-            return "[Error: No credentials provided — Google Gemini API Key missing]"
+            return "[Error: No credentials provided — Google Gemini login or API Key missing]"
         
         target_model = model_id
         if not target_model:
@@ -149,7 +226,7 @@ class GoogleGeminiAdapter(AetherProvider):
 
     def stream(self, request: str, model_id: Optional[str] = None, **kwargs) -> Any:
         if not self._client and not self._init_client():
-            yield "[Error: No credentials provided — Google Gemini API Key missing]"
+            yield "[Error: No credentials provided — Google Gemini login or API Key missing]"
             return
             
         target_model = model_id
@@ -172,5 +249,7 @@ class GoogleGeminiAdapter(AetherProvider):
 
     def disconnect(self) -> None:
         CredentialManager.clear_credential("google_gemini")
+        CredentialManager.clear_credential("google_gemini_oauth")
+        self._oauth_credentials = None
         self._is_authenticated = False
         self._client = None
