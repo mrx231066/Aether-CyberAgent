@@ -33,7 +33,7 @@ class ProviderManager:
         saved_provider = config.get("active_provider")
         saved_model = config.get("active_model")
 
-        # Auto-instantiate any provider with saved credentials
+        # Auto-instantiate any provider with stored credentials
         for choice, (p_id, factory) in PROVIDER_REGISTRY.items():
             if p_id in cls._providers:
                 continue
@@ -41,30 +41,43 @@ class ProviderManager:
             if key or p_id in ("ollama", "vllm"):
                 try:
                     provider = factory()
-                    provider._is_authenticated = True
                     if hasattr(provider, "_init_client"):
                         provider._init_client()
-                    cls._providers[p_id] = provider
+                    if provider.validate_credentials():
+                        provider._is_authenticated = True
+                        cls._providers[p_id] = provider
                 except Exception:
                     pass
 
+        # Select saved provider if authenticated, otherwise pick first valid provider
         if saved_provider and saved_provider in cls._providers:
             cls._active_provider_name = saved_provider
-        elif cls._providers and not cls._active_provider_name:
+        elif cls._providers:
             cls._active_provider_name = next(iter(cls._providers))
+        else:
+            cls._active_provider_name = None
+            cls._active_model_id = None
+            return
 
+        # Perform live model discovery on the active provider
         active_provider = cls.get_active_provider()
         if active_provider:
-            if saved_model:
-                cls._active_model_id = saved_model
             try:
-                models = active_provider.list_models()
+                models = active_provider.list_models(force_refresh=True)
                 if models:
                     cls._model_registry[active_provider.name] = models
-                    if not cls._active_model_id or not any(m.model_id == cls._active_model_id for m in models):
+                    if saved_model and any(m.model_id == saved_model for m in models):
+                        cls._active_model_id = saved_model
+                    else:
                         cls._active_model_id = models[0].model_id
+                else:
+                    del cls._providers[active_provider.name]
+                    cls._active_provider_name = None
+                    cls._active_model_id = None
             except Exception:
-                pass
+                del cls._providers[active_provider.name]
+                cls._active_provider_name = None
+                cls._active_model_id = None
 
     @classmethod
     def register(cls, provider: AetherProvider):
