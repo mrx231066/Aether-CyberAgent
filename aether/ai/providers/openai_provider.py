@@ -91,9 +91,14 @@ class OpenAIAdapter(AetherProvider):
                 target_model = "gpt-4o"
 
         try:
+            from aether.ai.prompt_builder import AETHER_IDENTITY_PROMPT
+            messages = [
+                {"role": "system", "content": AETHER_IDENTITY_PROMPT},
+                {"role": "user", "content": request}
+            ]
             response = self._client.chat.completions.create(
                 model=target_model,
-                messages=[{"role": "user", "content": request}],
+                messages=messages,
             )
             return response.choices[0].message.content
         except Exception as e:
@@ -114,9 +119,14 @@ class OpenAIAdapter(AetherProvider):
                 target_model = "gpt-4o"
 
         try:
+            from aether.ai.prompt_builder import AETHER_IDENTITY_PROMPT
+            messages = [
+                {"role": "system", "content": AETHER_IDENTITY_PROMPT},
+                {"role": "user", "content": request}
+            ]
             response = self._client.chat.completions.create(
                 model=target_model,
-                messages=[{"role": "user", "content": request}],
+                messages=messages,
                 stream=True,
             )
             for chunk in response:

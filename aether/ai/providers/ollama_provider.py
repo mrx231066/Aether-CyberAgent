@@ -82,9 +82,10 @@ class OllamaAdapter(AetherProvider):
 
         try:
             import httpx
+            from aether.ai.prompt_builder import AETHER_IDENTITY_PROMPT
             resp = httpx.post(
                 f"{self._base_url}/api/generate",
-                json={"model": target_model, "prompt": request, "stream": False},
+                json={"model": target_model, "prompt": request, "system": AETHER_IDENTITY_PROMPT, "stream": False},
                 timeout=120,
             )
             if resp.status_code == 200:
@@ -103,10 +104,11 @@ class OllamaAdapter(AetherProvider):
 
         try:
             import httpx
+            from aether.ai.prompt_builder import AETHER_IDENTITY_PROMPT
             with httpx.stream(
                 "POST",
                 f"{self._base_url}/api/generate",
-                json={"model": target_model, "prompt": request, "stream": True},
+                json={"model": target_model, "prompt": request, "system": AETHER_IDENTITY_PROMPT, "stream": True},
                 timeout=120,
             ) as resp:
                 import json

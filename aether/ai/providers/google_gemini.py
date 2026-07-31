@@ -139,9 +139,15 @@ class GoogleGeminiAdapter(AetherProvider):
             target_model = models[0].model_id
 
         try:
+            from aether.ai.prompt_builder import AETHER_IDENTITY_PROMPT
+            from google.genai import types
+            config = types.GenerateContentConfig(
+                system_instruction=AETHER_IDENTITY_PROMPT
+            )
             response = self._client.models.generate_content(
                 model=target_model,
                 contents=request,
+                config=config,
             )
             return response.text
         except Exception as e:
@@ -158,9 +164,15 @@ class GoogleGeminiAdapter(AetherProvider):
             target_model = models[0].model_id
 
         try:
+            from aether.ai.prompt_builder import AETHER_IDENTITY_PROMPT
+            from google.genai import types
+            config = types.GenerateContentConfig(
+                system_instruction=AETHER_IDENTITY_PROMPT
+            )
             response = self._client.models.generate_content_stream(
                 model=target_model,
                 contents=request,
+                config=config,
             )
             for chunk in response:
                 yield chunk.text

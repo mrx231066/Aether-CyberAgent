@@ -104,9 +104,11 @@ class AnthropicAdapter(AetherProvider):
                 target_model = "claude-3-5-sonnet-20241022"
 
         try:
+            from aether.ai.prompt_builder import AETHER_IDENTITY_PROMPT
             message = self._client.messages.create(
                 model=target_model,
                 max_tokens=4096,
+                system=AETHER_IDENTITY_PROMPT,
                 messages=[{"role": "user", "content": request}],
             )
             return message.content[0].text
@@ -128,9 +130,11 @@ class AnthropicAdapter(AetherProvider):
                 target_model = "claude-3-5-sonnet-20241022"
 
         try:
+            from aether.ai.prompt_builder import AETHER_IDENTITY_PROMPT
             with self._client.messages.stream(
                 model=target_model,
                 max_tokens=4096,
+                system=AETHER_IDENTITY_PROMPT,
                 messages=[{"role": "user", "content": request}],
             ) as stream:
                 for text in stream.text_stream:
