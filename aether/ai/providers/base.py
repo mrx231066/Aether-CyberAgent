@@ -21,7 +21,7 @@ class AetherProvider(ABC):
 
     @abstractmethod
     def authenticate(self) -> bool:
-        """Trigger authentication flow (OAuth or API Key)."""
+        """Trigger authentication flow."""
         pass
 
     @abstractmethod
