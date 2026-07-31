@@ -652,68 +652,89 @@ def _run_script(script_path: str):
 
 
 def _chat_with_agent(user_input: str, api_key: str, model: str, patcher=None):
-    """Route conversational queries with dynamic multi-stage UI animations and smooth typewriter streaming."""
+    """Route conversational queries with dynamic multi-stage UI animations, ActionExecutor tag execution, and CommandGuardValidator protection."""
     import time
     from aether.ai.provider_manager import ProviderManager
+    from aether.engine.action_executor import ActionExecutor
+    from aether.engine.guard_validator import CommandGuardValidator
+
     provider = ProviderManager.get_active_provider()
+    executor = ActionExecutor()
 
     try:
         if provider:
             active_model = ProviderManager._active_model_id or "default"
-            
-            # Multi-Stage Dynamic UI Animations
-            with console.status("[bold cyan]🔍 Analyzing query...[/bold cyan]", spinner="dots") as status:
-                time.sleep(0.12)
-                try:
-                    status.update("[bold yellow]🧠 Searching codebase graph & memory...[/bold yellow]", spinner="earth")
-                except Exception:
-                    status.update("[bold yellow]🧠 Searching codebase graph & memory...[/bold yellow]")
-                time.sleep(0.12)
-                try:
-                    status.update("[bold magenta]⚡ Synthesizing AI response...[/bold magenta]", spinner="moon")
-                except Exception:
-                    status.update("[bold magenta]⚡ Synthesizing AI response...[/bold magenta]")
-                
-                stream_gen = provider.stream(user_input, active_model)
-                first_chunk = None
-                try:
-                    first_chunk = next(stream_gen)
-                except StopIteration:
+            current_prompt = user_input
+
+            for attempt in range(3):
+                with console.status("[bold cyan]🔍 Analyzing query...[/bold cyan]", spinner="dots") as status:
+                    time.sleep(0.1)
+                    try:
+                        status.update("[bold yellow]🧠 Searching codebase graph & memory...[/bold yellow]", spinner="earth")
+                    except Exception:
+                        status.update("[bold yellow]🧠 Searching codebase graph & memory...[/bold yellow]")
+                    time.sleep(0.1)
+                    try:
+                        status.update("[bold magenta]⚡ Synthesizing AI response...[/bold magenta]", spinner="moon")
+                    except Exception:
+                        status.update("[bold magenta]⚡ Synthesizing AI response...[/bold magenta]")
+                    
+                    stream_gen = provider.stream(current_prompt, active_model)
                     first_chunk = None
+                    try:
+                        first_chunk = next(stream_gen)
+                    except StopIteration:
+                        first_chunk = None
 
-            console.print("\n[bold cyan]Aether:[/bold cyan] ", end="")
+                console.print("\n[bold cyan]Aether:[/bold cyan] ", end="")
 
-            full_response = ""
-            if first_chunk:
-                first_str = str(first_chunk)
-                full_response += first_str
-                for char in first_str:
-                    sys.stdout.write(char)
-                    sys.stdout.flush()
-                    time.sleep(0.003)
+                full_response = ""
+                if first_chunk:
+                    first_str = str(first_chunk)
+                    full_response += first_str
+                    for char in first_str:
+                        sys.stdout.write(char)
+                        sys.stdout.flush()
+                        time.sleep(0.002)
 
-                for chunk in stream_gen:
-                    if chunk:
-                        chunk_str = str(chunk)
-                        full_response += chunk_str
-                        for char in chunk_str:
-                            sys.stdout.write(char)
-                            sys.stdout.flush()
-                            time.sleep(0.002)
+                    for chunk in stream_gen:
+                        if chunk:
+                            chunk_str = str(chunk)
+                            full_response += chunk_str
+                            for char in chunk_str:
+                                sys.stdout.write(char)
+                                sys.stdout.flush()
+                                time.sleep(0.001)
 
-            console.print("\n")
-            
-            # Save conversation to database WAL & SessionState
-            try:
-                from aether.engine.db import AetherDB
-                from aether.config import SessionState
-                AetherDB.save_history("user", user_input)
-                AetherDB.save_history("assistant", full_response)
-                if hasattr(SessionState, "history"):
-                    SessionState.history.append({"role": "user", "content": user_input})
-                    SessionState.history.append({"role": "assistant", "content": full_response})
-            except Exception:
-                pass
+                console.print("\n")
+
+                # Step 1: Execute any structured action tags (<bash>, <python>, <read>, etc.)
+                _, executed_actions = executor.process_and_execute_response(full_response)
+
+                # Step 2: Validate turn with CommandGuardValidator
+                is_valid, reason = CommandGuardValidator.validate_turn(full_response, executed_actions)
+                if is_valid:
+                    # Save conversation to database WAL & SessionState
+                    try:
+                        from aether.engine.db import AetherDB
+                        from aether.config import SessionState
+                        AetherDB.save_history("user", user_input)
+                        AetherDB.save_history("assistant", full_response)
+                        if hasattr(SessionState, "history"):
+                            SessionState.history.append({"role": "user", "content": user_input})
+                            SessionState.history.append({"role": "assistant", "content": full_response})
+                    except Exception:
+                        pass
+                    return None
+                
+                # Failed validation: Re-prompt internally
+                if attempt < 2:
+                    console.print("[bold yellow]⚠️ Guard Interceptor: Detected unexecuted commands in text response. Re-prompting agent for execution...[/bold yellow]")
+                    current_prompt = CommandGuardValidator.get_retry_prompt() + f"\nOriginal request: {user_input}"
+                else:
+                    console.print("[bold red]❌ Agent failed to execute required commands — manual intervention needed[/bold red]")
+                    return None
+
             return None
         else:
             from aether.agents.yellow_patcher import YellowPatcher

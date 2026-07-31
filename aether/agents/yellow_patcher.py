@@ -298,6 +298,13 @@ class YellowPatcher:
             if not function_calls:
                 console.print()  # Newline after finished streaming text
                 final_text = "\n".join(text_parts) if text_parts else "Task completed."
+
+                # Execute any structured action tags (<bash>, <python>, <read>, etc.)
+                from aether.engine.action_executor import ActionExecutor
+                from aether.engine.guard_validator import CommandGuardValidator
+                executor = ActionExecutor(self.tools)
+                _, executed_actions = executor.process_and_execute_response(final_text)
+
                 SessionState.chat_history.append(f"Aether: {final_text}")
                 return final_text
 
