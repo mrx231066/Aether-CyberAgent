@@ -652,7 +652,8 @@ def _run_script(script_path: str):
 
 
 def _chat_with_agent(user_input: str, api_key: str, model: str, patcher=None):
-    """Route conversational queries with live token streaming and thinking UI effects."""
+    """Route conversational queries with dynamic multi-stage UI animations and smooth typewriter streaming."""
+    import time
     from aether.ai.provider_manager import ProviderManager
     provider = ProviderManager.get_active_provider()
 
@@ -660,8 +661,13 @@ def _chat_with_agent(user_input: str, api_key: str, model: str, patcher=None):
         if provider:
             active_model = ProviderManager._active_model_id or "default"
             
-            # Rich Status Spinner ("Thinking...")
-            with console.status("[bold cyan]⚡ Thinking...[/bold cyan]", spinner="dots"):
+            # Multi-Stage Dynamic UI Animations
+            with console.status("[bold cyan]🔍 Analyzing query...[/bold cyan]", spinner="dots") as status:
+                time.sleep(0.15)
+                status.update("[bold yellow]🧠 Searching codebase graph & memory...[/bold yellow]", spinner="earth")
+                time.sleep(0.15)
+                status.update("[bold magenta]⚡ Synthesizing AI response...[/bold magenta]", spinner="pulse")
+                
                 stream_gen = provider.stream(user_input, active_model)
                 first_chunk = None
                 try:
@@ -673,13 +679,19 @@ def _chat_with_agent(user_input: str, api_key: str, model: str, patcher=None):
 
             full_response = ""
             if first_chunk:
-                full_response += str(first_chunk)
-                console.print(str(first_chunk), end="", flush=True)
+                first_str = str(first_chunk)
+                full_response += first_str
+                for char in first_str:
+                    console.print(char, end="", flush=True)
+                    time.sleep(0.003)
 
                 for chunk in stream_gen:
                     if chunk:
-                        full_response += str(chunk)
-                        console.print(str(chunk), end="", flush=True)
+                        chunk_str = str(chunk)
+                        full_response += chunk_str
+                        for char in chunk_str:
+                            console.print(char, end="", flush=True)
+                            time.sleep(0.002)
 
             console.print("\n")
             
