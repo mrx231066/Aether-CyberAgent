@@ -652,15 +652,48 @@ def _run_script(script_path: str):
 
 
 def _chat_with_agent(user_input: str, api_key: str, model: str, patcher=None):
-    """Route conversational queries using ProviderManager active provider or YellowPatcher."""
+    """Route conversational queries with live token streaming and thinking UI effects."""
     from aether.ai.provider_manager import ProviderManager
     provider = ProviderManager.get_active_provider()
 
     try:
         if provider:
             active_model = ProviderManager._active_model_id or "default"
-            response = provider.generate(user_input, active_model)
-            console.print(f"\n[bold cyan]Aether:[/bold cyan] {response}\n")
+            
+            # Rich Status Spinner ("Thinking...")
+            with console.status("[bold cyan]⚡ Thinking...[/bold cyan]", spinner="dots"):
+                stream_gen = provider.stream(user_input, active_model)
+                first_chunk = None
+                try:
+                    first_chunk = next(stream_gen)
+                except StopIteration:
+                    first_chunk = None
+
+            console.print("\n[bold cyan]Aether:[/bold cyan] ", end="")
+
+            full_response = ""
+            if first_chunk:
+                full_response += str(first_chunk)
+                console.print(str(first_chunk), end="", flush=True)
+
+                for chunk in stream_gen:
+                    if chunk:
+                        full_response += str(chunk)
+                        console.print(str(chunk), end="", flush=True)
+
+            console.print("\n")
+            
+            # Save conversation to database WAL & SessionState
+            try:
+                from aether.engine.db import AetherDB
+                from aether.config import SessionState
+                AetherDB.save_history("user", user_input)
+                AetherDB.save_history("assistant", full_response)
+                if hasattr(SessionState, "history"):
+                    SessionState.history.append({"role": "user", "content": user_input})
+                    SessionState.history.append({"role": "assistant", "content": full_response})
+            except Exception:
+                pass
             return None
         else:
             from aether.agents.yellow_patcher import YellowPatcher
