@@ -36,8 +36,8 @@ class OpenAIAdapter(AetherProvider):
             key = CredentialManager.get_credential("openai")
             if key:
                 self._client = openai.OpenAI(api_key=key)
-        except ImportError:
-            console.print("[dim yellow]openai package not installed. Install with: pip install openai[/dim yellow]")
+        except Exception:
+            pass
 
     def validate_credentials(self) -> bool:
         return CredentialManager.get_credential("openai") is not None
@@ -57,10 +57,10 @@ class OpenAIAdapter(AetherProvider):
                             display_name=m.id,
                             capabilities={"streaming": True, "vision": "vision" in m.id or "4o" in m.id, "tools": True},
                         ))
-                return sorted(result, key=lambda x: x.model_id)
+                if result:
+                    return sorted(result, key=lambda x: x.model_id)
             except Exception:
                 pass
-        # Fallback static list
         return [
             ModelMetadata(provider=self.name, provider_display_name=self.display_name, model_id="gpt-4o", display_name="GPT-4o", capabilities={"streaming": True, "vision": True, "tools": True}),
             ModelMetadata(provider=self.name, provider_display_name=self.display_name, model_id="gpt-4o-mini", display_name="GPT-4o Mini", capabilities={"streaming": True, "vision": True, "tools": True}),
@@ -73,27 +73,29 @@ class OpenAIAdapter(AetherProvider):
                 return m
         return None
 
-    def generate(self, request: str, model_id: str, **kwargs) -> str:
+    def generate(self, request: str, model_id: Optional[str] = None, **kwargs) -> str:
         self._init_client()
         if not self._client:
-            return "[Error: OpenAI client not initialized]"
+            return "[Error: OpenAI client not initialized or missing API Key]"
+        target_model = model_id or "gpt-4o"
         try:
             response = self._client.chat.completions.create(
-                model=model_id,
+                model=target_model,
                 messages=[{"role": "user", "content": request}],
             )
             return response.choices[0].message.content
         except Exception as e:
             return f"[OpenAI Error: {e}]"
 
-    def stream(self, request: str, model_id: str, **kwargs) -> Any:
+    def stream(self, request: str, model_id: Optional[str] = None, **kwargs) -> Any:
         self._init_client()
         if not self._client:
-            yield "[Error: OpenAI client not initialized]"
+            yield "[Error: OpenAI client not initialized or missing API Key]"
             return
+        target_model = model_id or "gpt-4o"
         try:
             response = self._client.chat.completions.create(
-                model=model_id,
+                model=target_model,
                 messages=[{"role": "user", "content": request}],
                 stream=True,
             )

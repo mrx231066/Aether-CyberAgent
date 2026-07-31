@@ -36,8 +36,8 @@ class AnthropicAdapter(AetherProvider):
             key = CredentialManager.get_credential("anthropic")
             if key:
                 self._client = anthropic.Anthropic(api_key=key)
-        except ImportError:
-            console.print("[dim yellow]anthropic package not installed. Install with: pip install anthropic[/dim yellow]")
+        except Exception:
+            pass
 
     def validate_credentials(self) -> bool:
         return CredentialManager.get_credential("anthropic") is not None
@@ -55,13 +55,14 @@ class AnthropicAdapter(AetherProvider):
                 return m
         return None
 
-    def generate(self, request: str, model_id: str, **kwargs) -> str:
+    def generate(self, request: str, model_id: Optional[str] = None, **kwargs) -> str:
         self._init_client()
         if not self._client:
-            return "[Error: Anthropic client not initialized]"
+            return "[Error: Anthropic client not initialized or missing API Key]"
+        target_model = model_id or "claude-sonnet-4-20250514"
         try:
             message = self._client.messages.create(
-                model=model_id,
+                model=target_model,
                 max_tokens=4096,
                 messages=[{"role": "user", "content": request}],
             )
@@ -69,14 +70,15 @@ class AnthropicAdapter(AetherProvider):
         except Exception as e:
             return f"[Anthropic Error: {e}]"
 
-    def stream(self, request: str, model_id: str, **kwargs) -> Any:
+    def stream(self, request: str, model_id: Optional[str] = None, **kwargs) -> Any:
         self._init_client()
         if not self._client:
-            yield "[Error: Anthropic client not initialized]"
+            yield "[Error: Anthropic client not initialized or missing API Key]"
             return
+        target_model = model_id or "claude-sonnet-4-20250514"
         try:
             with self._client.messages.stream(
-                model=model_id,
+                model=target_model,
                 max_tokens=4096,
                 messages=[{"role": "user", "content": request}],
             ) as stream:

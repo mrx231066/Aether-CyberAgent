@@ -43,8 +43,8 @@ class OpenAICompatibleAdapter(AetherProvider):
             key = CredentialManager.get_credential(self.name)
             if key:
                 self._client = openai.OpenAI(api_key=key, base_url=self._base_url)
-        except ImportError:
-            console.print("[dim yellow]openai package not installed. Install with: pip install openai[/dim yellow]")
+        except Exception:
+            pass
 
     def validate_credentials(self) -> bool:
         return CredentialManager.get_credential(self.name) is not None
@@ -67,7 +67,6 @@ class OpenAICompatibleAdapter(AetherProvider):
                     return sorted(result, key=lambda x: x.model_id)
             except Exception:
                 pass
-        # Fallback to default models
         return [
             ModelMetadata(
                 provider=self.name,
@@ -84,27 +83,29 @@ class OpenAICompatibleAdapter(AetherProvider):
                 return m
         return None
 
-    def generate(self, request: str, model_id: str, **kwargs) -> str:
+    def generate(self, request: str, model_id: Optional[str] = None, **kwargs) -> str:
         self._init_client()
         if not self._client:
-            return f"[Error: {self.display_name} client not initialized]"
+            return f"[Error: {self.display_name} client not initialized or missing API Key]"
+        target_model = model_id or (self._default_models[0]["id"] if self._default_models else "default")
         try:
             response = self._client.chat.completions.create(
-                model=model_id,
+                model=target_model,
                 messages=[{"role": "user", "content": request}],
             )
             return response.choices[0].message.content
         except Exception as e:
             return f"[{self.display_name} Error: {e}]"
 
-    def stream(self, request: str, model_id: str, **kwargs) -> Any:
+    def stream(self, request: str, model_id: Optional[str] = None, **kwargs) -> Any:
         self._init_client()
         if not self._client:
-            yield f"[Error: {self.display_name} client not initialized]"
+            yield f"[Error: {self.display_name} client not initialized or missing API Key]"
             return
+        target_model = model_id or (self._default_models[0]["id"] if self._default_models else "default")
         try:
             response = self._client.chat.completions.create(
-                model=model_id,
+                model=target_model,
                 messages=[{"role": "user", "content": request}],
                 stream=True,
             )

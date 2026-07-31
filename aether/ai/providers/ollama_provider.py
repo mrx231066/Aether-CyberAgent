@@ -15,7 +15,7 @@ class OllamaAdapter(AetherProvider):
 
     def __init__(self, base_url: str = "http://localhost:11434"):
         self._base_url = base_url
-        self._is_authenticated = True  # Local, no auth needed
+        self._is_authenticated = True
 
     def authenticate(self) -> bool:
         console.print("\n╭──────────────────────────────────────╮")
@@ -26,11 +26,11 @@ class OllamaAdapter(AetherProvider):
         if self.health_check():
             console.print("[bold green]✅ Connected to Ollama![/bold green]")
             return True
-        console.print("[red]❌ Cannot reach Ollama. Is it running?[/red]")
+        console.print("[red]❌ Cannot reach Ollama at {self._base_url}. Is it running?[/red]")
         return False
 
     def validate_credentials(self) -> bool:
-        return True  # No credentials needed
+        return True
 
     def list_models(self) -> List[ModelMetadata]:
         try:
@@ -58,12 +58,14 @@ class OllamaAdapter(AetherProvider):
                 return m
         return None
 
-    def generate(self, request: str, model_id: str, **kwargs) -> str:
+    def generate(self, request: str, model_id: Optional[str] = None, **kwargs) -> str:
+        models = self.list_models()
+        target_model = model_id or (models[0].model_id if models else "llama3")
         try:
             import httpx
             resp = httpx.post(
                 f"{self._base_url}/api/generate",
-                json={"model": model_id, "prompt": request, "stream": False},
+                json={"model": target_model, "prompt": request, "stream": False},
                 timeout=120,
             )
             if resp.status_code == 200:
@@ -72,13 +74,15 @@ class OllamaAdapter(AetherProvider):
         except Exception as e:
             return f"[Ollama Error: {e}]"
 
-    def stream(self, request: str, model_id: str, **kwargs) -> Any:
+    def stream(self, request: str, model_id: Optional[str] = None, **kwargs) -> Any:
+        models = self.list_models()
+        target_model = model_id or (models[0].model_id if models else "llama3")
         try:
             import httpx
             with httpx.stream(
                 "POST",
                 f"{self._base_url}/api/generate",
-                json={"model": model_id, "prompt": request, "stream": True},
+                json={"model": target_model, "prompt": request, "stream": True},
                 timeout=120,
             ) as resp:
                 import json
