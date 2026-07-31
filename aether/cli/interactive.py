@@ -236,9 +236,11 @@ def handle_slash_command(command: str, api_key: str, model: str) -> Optional[str
 
     elif cmd == "/provider":
         if not args:
-            # Show real status — don't auto-register anything
             ProviderManager.status()
-        elif args == "add":
+            if not ProviderManager.get_active_provider():
+                args = "add"
+        
+        if args == "add":
             from aether.ai.providers import PROVIDER_REGISTRY
             from aether.ai.providers.openai_compatible import create_custom_adapter
             console.print("\n╭──────────────────────────────────────╮")
