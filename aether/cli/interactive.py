@@ -20,7 +20,8 @@ from rich import box
 
 console = Console()
 
-from aether.auth import load_config, save_config, authenticate
+from aether.auth import load_config, save_config
+from aether.ai.provider_manager import ProviderManager
 
 REPL_BANNER = """[bold cyan]
     █████╗ ███████╗████████╗██╗  ██╗███████╗██████╗        [bold white]v4.0.1[/bold white]
@@ -546,6 +547,7 @@ def start_interactive_session():
     # Step 1: Check ProviderManager for authentication
     active_provider = ProviderManager.get_active_provider()
     model = ProviderManager._active_model_id if active_provider else "None (Use /provider add)"
+    api_key = ""  # Legacy variable required by handlers
 
     if not active_provider:
         console.print("[dim yellow]No AI Provider configured. You are in offline mode. Type /provider add to set one up.[/dim yellow]\n")
