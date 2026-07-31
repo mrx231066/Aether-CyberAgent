@@ -65,6 +65,7 @@ def test_anthropic_live_model_discovery(monkeypatch):
 def test_gemini_live_model_discovery(monkeypatch):
     clear_model_cache("google_gemini")
     adapter = GoogleGeminiAdapter()
+    monkeypatch.setattr(CredentialManager, "get_credential", lambda *args: "mock-gemini-key")
     
     mock_client = MagicMock()
     class MockGeminiModel:
@@ -73,7 +74,7 @@ def test_gemini_live_model_discovery(monkeypatch):
         
     mock_client.models.list.return_value = [MockGeminiModel()]
     adapter._client = mock_client
-    monkeypatch.setattr(adapter, "_init_client", lambda: None)
+    monkeypatch.setattr(adapter, "_init_client", lambda: True)
     
     models = adapter.list_models(force_refresh=True)
     assert len(models) == 1
