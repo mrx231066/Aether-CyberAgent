@@ -1,5 +1,4 @@
 """Global configuration state for Aether-CyberAgent v4.0.1."""
-from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional
 
 class Config:
@@ -8,9 +7,10 @@ class Config:
     OFFLINE_MODE = False
     WATCH_MODE = False
 
-@dataclass
 class SessionState:
-    """Manages active session context and configuration."""
+    """Manages active session context and configuration.
+    Uses class-level attributes to support both static and instance access without AttributeError.
+    """
     project_root: str = "."
     auto_apply_patches: bool = False
     verbose_tools: bool = False
@@ -20,6 +20,6 @@ class SessionState:
     total_tokens: int = 0
     start_time: str = ""
     capabilities: Any = None      # Injected at startup
-    history: List[Dict[str, Any]] = field(default_factory=list)
-    chat_history: List[Any] = field(default_factory=list)
+    history: List[Dict[str, Any]] = []
+    chat_history: List[Any] = []
     current_plan: Optional[Dict[str, Any]] = None
